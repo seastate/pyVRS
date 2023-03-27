@@ -24,6 +24,7 @@ class Layer():
         super().__init__(**kwargs)
         # Default base parameters
         base_pars={'density':None,
+                   'immersed_in':None,
                    'scale_factor':1,
                    'offset':np.array([0,0,0]),
                    'rotate':np.array([0,0,0,0])}
@@ -41,6 +42,20 @@ class Layer():
         """ A convenience method to execute a commit
         """
         self.mesh = mesh.Mesh.from_file(self.stlfile)
+        if update:
+            self.update()
+
+    def translate_mesh(self,translation,update=True):
+        """ A convenience method to translate the current mesh
+        """
+        self.mesh.translate(translation)
+        if update:
+            self.update()
+
+    def rotate_mesh(self,axis,theta,point=None,update=True):
+        """ A convenience method to rotate the current mesh
+        """
+        self.mesh.rotate(axis,theta=theta,point=point)
         if update:
             self.update()
 
