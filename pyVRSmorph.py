@@ -12,18 +12,40 @@ import math
 
 from attrdict import AttrDict
 
+#==============================================================================
+# Code to find the intersection, if there is one, of a line and a triangle
+# in 3D, due to @Jochemspek,
+# https://stackoverflow.com/questions/42740765/intersection-between-line-and-triangle-in-3d
+def intersect_line_triangle(q1,q2,p1,p2,p3):
+    def signed_tetra_volume(a,b,c,d):
+        return np.sign(np.dot(np.cross(b-a,c-a),d-a)/6.0)
 
+    s1 = signed_tetra_volume(q1,p1,p2,p3)
+    s2 = signed_tetra_volume(q2,p1,p2,p3)
+
+    if s1 != s2:
+        s3 = signed_tetra_volume(q1,q2,p1,p2)
+        s4 = signed_tetra_volume(q1,q2,p2,p3)
+        s5 = signed_tetra_volume(q1,q2,p3,p1)
+        if s3 == s4 and s4 == s5:
+            n = np.cross(p2-p1,p3-p1)
+            #t = -np.dot(q1,n-p1) / np.dot(q1,q2-q1)
+            t = np.dot(p1-q1,n) / np.dot(q2-q1,n)
+            return q1 + t * (q2-q1)
+    return None
+#==============================================================================
 class Layer():
     """ A base class to facilitate creating and modifying layers (surfaces enclosing
         or excluding morphological features of a swimming organism) for
         hydrodynamic modeling. 
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},**kwargs):
+    def __init__(self,stlfile=None,mesh=None,pars={},layer_type=None,**kwargs):
         """ Create a layer instance, using an AttrDict object.
         """
         super().__init__(**kwargs)
         # Default base parameters
         base_pars={'density':None,
+                   'material':None,
                    'immersed_in':None,
                    'scale_factor':1,
                    'offset':np.array([0,0,0]),
@@ -32,6 +54,7 @@ class Layer():
         self.pars=AttrDict(base_pars)
         self.pars.update(pars)
         #print(self.pars)
+        self.layer_type = layer_type
         self.mesh = mesh
         # If provided, load the specified stl file
         self.stlfile = stlfile
@@ -112,20 +135,31 @@ class Surface(Layer):
         includes singularities associated with boundary conditions and ciliary
         forces, control points on the skin, etc.
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},
-                 density=1070.,sing=True,control=True,
+    def __init__(self,stlfile=None,mesh=None,pars={},,layer_type='surface',
+                 density=1070.,material='tissue',immersed_in='water',
+                 get_points=True,
                  tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
-        super().__init__(stlfile,mesh,pars,**kwargs)
+        super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
         #print(self.pars)
         self.pars.density = density
+        self.pars.material = material
+        self.pars.immersed_in = immersed_in
         self.pars.tetra_project = tetra_project
         self.pars.tetra_project_min = tetra_project_min
         print('Created Surface object with parameters:\n{}'.format(self.pars))
+        if get_points:
+            print('Getting control and singularity points...')
+            self.get_points()
         
-    def get_points(self,sing=True,control=True):
+    def get_points(self,sing=True,control=True,
+                   tetra_project=None,tetra_project_min=None):
         """ A method to generate control points and singularity (Stokeslet)
             locations.
         """
+        if tetra_project is not None:
+            self.pars.tetra_project = tetra_project
+        if tetra_project_min is not None:
+            self.pars.tetra_project_min = tetra_project_min
         self.ctrlpts = self.mesh.centroids
         scl = np.maximum(self.pars.tetra_project * np.sqrt(self.mesh.areas),
                      self.pars.tetra_project_min*np.ones(self.mesh.areas.shape)).repeat(3,axis=1)
@@ -140,45 +174,98 @@ class Surface(Layer):
             self.unormals[:,2].reshape([nfaces,1]).repeat(3,axis=1)*self.unormals
         self.rel_speed = np.linalg.norm(self.rel_Ucilia,ord=2,axis=1,keepdims=True)
 
+#==============================================================================
+class Inclusion(Layer):
+    """ A derived class to contain the an inclusion Layer, which displaces
+        volume from the Layer in which it is immersed. It is assumed, but
+        not currently verified, that the inclusion lies entirely within 
+        the specified surrounding Layer. This assumption arises in calculations
+        of gravity and buoyancy centers and forces.
+    """
+    def __init__(self,stlfile=None,mesh=None,pars={},
+                 density=1070.,sing=True,control=True,
+                 tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
+        super().__init__(stlfile,mesh,pars,**kwargs)
+        #print(self.pars)
+        self.pars.density = density
+        self.pars.tetra_project = tetra_project
+        self.pars.tetra_project_min = tetra_project_min
+        print('Created Surface object with parameters:\n{}'.format(self.pars))
 
+#==============================================================================
 class Morphology():
-    """ A class to faciliate definition and calculations with organismal morphologies, including 
+    """ A class to faciliate specifications and calculations with organismal morphologies, including 
         ciliated and unciliated surfaces, inclusions and internal gaps, and various material
         densities.
     """
-    def __init__(self,mcon,pars={},table=None,required=[],required_unique=[],**kwargs):
+    def __init__(self,surface_stlfile=None,inclusion_stlfiles=[],densities={},**kwargs):
         """ Create a morphology instance, using an AttrDict object.
  
         """
         super().__init__(**kwargs)
-        pass
+        base_densities={'water':1030,
+                   'tissue':1070,
+                   'lipid':900,
+                   'calcite':2669}
+        # Update with passed parameters
+        self.densities=AttrDict(base_densities)
+        self.densities.update(densities)
+
+        # Add an attribute to store Layers
+        self.layers = []
 
 
+        def gen_surface(self,surface_stlfile=None,mesh=None,pars={},
+                        layer_type='surface',get_points=True,
+                        material='tissue',immersed_in='water'):
+        """A method to facilitate generating Surface objects to iniate
+           a morphology.
+        """
+        try:
+            surface = Surface(stlfile=surface_stlfile,mesh=mesh,pars=pars,
+                              density=self.densities[material],
+                              layer_type=layer_type,get_points=get_points,
+                              material=material,immersed_in=immersed_in)
+            self.layers.append(surface)
+            print('Added surface {} to layers list...'.format(len(self.layers)-1))
+        except:
+            print('Failed to load file to generate a Surface object...')
+
+        
+          def gen_inclusion(self,surface_stlfile=None,mesh=None,pars={},
+                        layer_type='inclusion',
+                        material='water',immersed_in='tissue'):
+        """A method to facilitate generating Inclusion objects within a surface
+           or another inclusion.
+        """
+        try:
+            inclusion = Inclusion(stlfile=inclusion_stlfile,mesh=mesh,pars=pars,
+                              density=self.densities[material],layer_type=layer_type,
+                              material=material,immersed_in=immersed_in)
+            self.layers.append(inclusion)
+            print('Added inclusion {} to layers list...'.format(len(self.layers)-1))
+        except:
+            print('Failed to load file to generate a Inclusion object...')
 
 
+        def plot_layers(self,axes,alpha=0.5,autoscale=True):
+            for layer in self.layers:
+                if layer.layer_type == 'surface':
+                    nfaces = layer.mesh.areas.shape[0]
+                    colors = np.zeros([nfaces,3])
+                    colors[:,0] = layer.rel_speed.flatten()
+                    colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
+                elif layer.layer_type == 'lipid':
+                    colors = np.asarray([0.,1.,1.])
+                elif layer.layer_type == 'calcite':
+                    colors = 'gray'
+                axes.add_collection3d(mplot3d.art3d.Poly3DCollection(layer.mesh.vectors,
+                                                                     shade=False,
+                                                                     facecolors=colors,
+                                                                     alpha=alpha))
+                if autoscale:
+                    axes.autoscale_view()
 
 
-
-
-# Code to find the intersection, if there is one, of a line and a triangle
-# in 3D, due to @Jochemspek,
-# https://stackoverflow.com/questions/42740765/intersection-between-line-and-triangle-in-3d
-def intersect_line_triangle(q1,q2,p1,p2,p3):
-    def signed_tetra_volume(a,b,c,d):
-        return np.sign(np.dot(np.cross(b-a,c-a),d-a)/6.0)
-
-    s1 = signed_tetra_volume(q1,p1,p2,p3)
-    s2 = signed_tetra_volume(q2,p1,p2,p3)
-
-    if s1 != s2:
-        s3 = signed_tetra_volume(q1,q2,p1,p2)
-        s4 = signed_tetra_volume(q1,q2,p2,p3)
-        s5 = signed_tetra_volume(q1,q2,p3,p1)
-        if s3 == s4 and s4 == s5:
-            n = np.cross(p2-p1,p3-p1)
-            #t = -np.dot(q1,n-p1) / np.dot(q1,q2-q1)
-            t = np.dot(p1-q1,n) / np.dot(q2-q1,n)
-            return q1 + t * (q2-q1)
-    return None
 
 
