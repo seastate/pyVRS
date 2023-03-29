@@ -131,12 +131,14 @@ class Layer():
             self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
 
 class Surface(Layer):
-    """ A derived class to contain the surface Layer, which additionally 
+    """ A derived class to contain an surface Layer, which additionally 
         includes singularities associated with boundary conditions and ciliary
         forces, control points on the skin, etc.
+
+        Surface layers are always immersed in the medium, which is (pseudo)layer 0.
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},,layer_type='surface',
-                 density=1070.,material='tissue',immersed_in='water',
+    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='surface',
+                 density=1070.,material='tissue',immersed_in=0,
                  get_points=True,
                  tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
         super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
@@ -176,21 +178,34 @@ class Surface(Layer):
 
 #==============================================================================
 class Inclusion(Layer):
-    """ A derived class to contain the an inclusion Layer, which displaces
+    """ A derived class to contain an inclusion Layer, which displaces
         volume from the Layer in which it is immersed. It is assumed, but
         not currently verified, that the inclusion lies entirely within 
         the specified surrounding Layer. This assumption arises in calculations
         of gravity and buoyancy centers and forces.
     """
     def __init__(self,stlfile=None,mesh=None,pars={},
-                 density=1070.,sing=True,control=True,
-                 tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
+                 density=1070.,sing=True,control=True,**kwargs):
         super().__init__(stlfile,mesh,pars,**kwargs)
         #print(self.pars)
         self.pars.density = density
-        self.pars.tetra_project = tetra_project
-        self.pars.tetra_project_min = tetra_project_min
-        print('Created Surface object with parameters:\n{}'.format(self.pars))
+        print('Created Inclusion object with parameters:\n{}'.format(self.pars))
+
+#==============================================================================
+class Medium(Layer):
+    """ A derived class to contain the properties of the medium (ambient seawater,
+        typically) in the form of a pseudo-layer (which is always the 0th layer).
+    """
+    def __init__(self,stlfile=None,mesh=None,pars={},
+                 density=1070.,nu = 1.17e-6,**kwargs):
+        super().__init__(stlfile,mesh,pars,**kwargs)
+        #print(self.pars)
+        #nu = 1.17e-6    #   Kinematic viscosity, meters^2/second
+        mu = nu * rho 
+        self.pars.density = density
+        self.pars.nu = nu
+        self.pars.mu = mu
+        print('Created Medium object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
 class Morphology():
@@ -210,16 +225,18 @@ class Morphology():
         # Update with passed parameters
         self.densities=AttrDict(base_densities)
         self.densities.update(densities)
+        # Add an attribute to store Layers. The medium (typically
+        # ambient seawater) is always the 0th layer
+        self.layers = [Medium(density=densities['water'])]
 
-        # Add an attribute to store Layers
-        self.layers = []
 
-
-        def gen_surface(self,surface_stlfile=None,mesh=None,pars={},
+    def gen_surface(self,surface_stlfile=None,mesh=None,pars={},
                         layer_type='surface',get_points=True,
-                        material='tissue',immersed_in='water'):
+                        material='tissue',immersed_in=0):
         """A method to facilitate generating Surface objects to iniate
-           a morphology.
+           a morphology. The parameter immersed_in specifies the layer
+           in which the surface is immersed, almost always the medium with
+           layer index 0.
         """
         try:
             surface = Surface(stlfile=surface_stlfile,mesh=mesh,pars=pars,
@@ -232,12 +249,17 @@ class Morphology():
             print('Failed to load file to generate a Surface object...')
 
         
-          def gen_inclusion(self,surface_stlfile=None,mesh=None,pars={},
+    def gen_inclusion(self,surface_stlfile=None,mesh=None,pars={},
                         layer_type='inclusion',
-                        material='water',immersed_in='tissue'):
+                        material='seawater',immersed_in=None):
         """A method to facilitate generating Inclusion objects within a surface
-           or another inclusion.
+           or another inclusion. The parameter immersed_in specifies the layer
+           in which the inclusion is immersed, almost always a surface layer of
+           layer_type tissue. Common inclusions include seawater, lipid and 
+           calcite.
         """
+        if immersed_in is None:
+            print('Please specify immersed_in, the index of the layer \nsurrounding this inclusion.')
         try:
             inclusion = Inclusion(stlfile=inclusion_stlfile,mesh=mesh,pars=pars,
                               density=self.densities[material],layer_type=layer_type,
@@ -248,23 +270,25 @@ class Morphology():
             print('Failed to load file to generate a Inclusion object...')
 
 
-        def plot_layers(self,axes,alpha=0.5,autoscale=True):
-            for layer in self.layers:
-                if layer.layer_type == 'surface':
-                    nfaces = layer.mesh.areas.shape[0]
-                    colors = np.zeros([nfaces,3])
-                    colors[:,0] = layer.rel_speed.flatten()
-                    colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
-                elif layer.layer_type == 'lipid':
-                    colors = np.asarray([0.,1.,1.])
-                elif layer.layer_type == 'calcite':
-                    colors = 'gray'
-                axes.add_collection3d(mplot3d.art3d.Poly3DCollection(layer.mesh.vectors,
-                                                                     shade=False,
-                                                                     facecolors=colors,
-                                                                     alpha=alpha))
-                if autoscale:
-                    axes.autoscale_view()
+    def plot_layers(self,axes,alpha=0.5,autoscale=True):
+        for layer in self.layers: # layer type "Medium" is invisible
+            if layer.layer_type == 'surface':
+                nfaces = layer.mesh.areas.shape[0]
+                colors = np.zeros([nfaces,3])
+                colors[:,0] = layer.rel_speed.flatten()
+                colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
+            elif layer.layer_type == 'lipid':
+                colors = np.asarray([0.,1.,1.])
+            elif layer.layer_type == 'calcite':
+                colors = 'gray'
+            elif layer.layer_type == 'seawater':
+                colors = np.asarray([0.3.,0.3,0.3])
+            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(layer.mesh.vectors,
+                                                                 shade=False,
+                                                                 facecolors=colors,
+                                                                 alpha=alpha))
+            if autoscale:
+                axes.autoscale_view()
 
 
 
