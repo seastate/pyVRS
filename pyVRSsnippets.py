@@ -6,20 +6,28 @@ import numpy as np
 import math
 
 pyplot.ion()
-
-from pyVRSmorph import *
-
 figure = pyplot.figure()
 axes = figure.add_subplot(projection='3d')
 
 
+from pyVRSmorph import *
+
 M = Morphology()
 
-M.gen_surface(stlfile='/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_2.000000e+00_1.250000e-01_1.500000e+00_3.125000e-02_7.519608e-01_int.stl')
+estl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_ext.stl'
+istl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_int.stl'
+
+M.gen_surface(stlfile=estl)
+M.gen_inclusion(stlfile=istl,immersed_in=1)
 M.plot_layers(axes=axes)
 
 scale = M.layers[1].mesh.points.flatten()
 axes.auto_scale_xyz(scale, scale, scale)
+
+
+
+inclusion = Inclusion(stlfile='/home/dg/VRS/pyFormex/STLfiles/blast_test_V8.000000e-06_rh1h2_1.809432e-02_1.200000e-02_9.000000e-03_prct8.000000e-01_incl1.stl',
+                              density=700,layer_type='inclusion',material='lipid',immersed_in=1)
 
 
 

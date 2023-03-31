@@ -54,17 +54,20 @@ class Layer():
         self.pars=AttrDict(base_pars)
         self.pars.update(pars)
         #print(self.pars)
-        self.layer_type = layer_type
+        self.pars.layer_type = layer_type
+        self.pars.transformations = []
         self.mesh = mesh
         # If provided, load the specified stl file
-        self.stlfile = stlfile
-        if self.stlfile is not None:
+        self.pars.stlfile = stlfile
+        if self.pars.stlfile is not None:
             self.loadSTL()
 
-    def loadSTL(self,update=True):
+    def loadSTL(self,stlfile=None,update=True):
         """ A convenience method to execute a commit
         """
-        self.mesh = mesh.Mesh.from_file(self.stlfile)
+        if stlfile is not None:
+            self.pars.stlfile = stlfile
+        self.mesh = mesh.Mesh.from_file(self.pars.stlfile)
         if update:
             self.update()
 
@@ -72,6 +75,7 @@ class Layer():
         """ A convenience method to translate the current mesh
         """
         self.mesh.translate(translation)
+        self.pars.transformations.append(['trans',translation])
         if update:
             self.update()
 
@@ -79,6 +83,7 @@ class Layer():
         """ A convenience method to rotate the current mesh
         """
         self.mesh.rotate(axis,theta=theta,point=point)
+        self.pars.transformations.append(['rot',axis,theta])
         if update:
             self.update()
 
@@ -101,7 +106,7 @@ class Layer():
             self.mesh.update_min()
             self.mesh.update_max()
         if mass_props:
-            self.volume, self.cog, self.inertia = self.mesh.get_mass_properties()
+            self.pars.volume, self.pars.cog, self.pars.inertia = self.mesh.get_mass_properties()
 
   
     def unitnormals(self,outwards=True,ref_point=None):
@@ -184,12 +189,13 @@ class Inclusion(Layer):
         the specified surrounding Layer. This assumption arises in calculations
         of gravity and buoyancy centers and forces.
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='seawater',
-                 density=1070.,sing=True,control=True,**kwargs):
+    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='inclusion',
+                 density=1070.,material='seawater',immersed_in=None,**kwargs):
         super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
         #print(self.pars)
         self.pars.density = density
         self.pars.layer_type = layer_type
+        self.pars.material = material
         print('Created Inclusion object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
@@ -197,8 +203,8 @@ class Medium(Layer):
     """ A derived class to contain the properties of the medium (ambient seawater,
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='seawater',
-                 density=1070.,nu = 1.17e-6,**kwargs):
+    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='medium',
+                 density=1070.,material='seawater',nu = 1.17e-6,**kwargs):
         super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
         #print(self.pars)
         #nu = 1.17e-6    #   Kinematic viscosity, meters^2/second
@@ -206,7 +212,7 @@ class Medium(Layer):
         self.pars.density = density
         self.pars.nu = nu
         self.pars.mu = mu
-        self.pars.layer_type = layer_type
+        self.pars.material = material
         print('Created Medium object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
@@ -231,6 +237,16 @@ class Morphology():
         # ambient seawater) is always the 0th layer
         self.layers = [Medium(density=self.densities['seawater'])]
 
+    def print_layer(self,layer_list=[],print_pars=True):
+        """A method to display a summary of layer properties.
+        """
+        if len(layer_list) == 0:
+            layer_list = range(len(self.layers))
+        for l in layer_list:
+            print('Layer {} of type {}'.format(l,type(self.layers[l])))
+            if print_pars:
+                print(self.layers[l].pars)
+                    
     def gen_surface(self,stlfile=None,mesh=None,pars={},
                         layer_type='surface',get_points=True,
                         material='tissue',immersed_in=0):
@@ -245,24 +261,25 @@ class Morphology():
                               layer_type=layer_type,get_points=get_points,
                               material=material,immersed_in=immersed_in)
             self.layers.append(surface)
-            print('Added surface {} to layers list...'.format(len(self.layers)-1))
+            #print('Added surface {} to layers list with parameters\n{}'.format(len(self.layers)-1),surface.pars)
+            print('Added surface to layers list:')
+            self.print_layer(layer_list=[-1]) #[len(self.layers)-1])
         except:
-            print('Failed to load file to generate a Surface object...')
-
+            print('Failed to load file or generate a Surface object...')
         
     def gen_inclusion(self,stlfile=None,mesh=None,pars={},
                         layer_type='inclusion',
                         material='seawater',immersed_in=None):
         """A method to facilitate generating Inclusion objects within a surface
-           or another inclusion. The parameter immersed_in specifies the layer
-           in which the inclusion is immersed, almost always a surface layer of
-           layer_type tissue. Common inclusions include seawater, lipid and 
-           calcite.
+           or another inclusion. The parameter immersed_in specifies the index of 
+           the layer in which the inclusion is immersed, almost always a surface 
+           layer of layer_type tissue. Common inclusions include seawater, lipid 
+           and calcite.
         """
         if immersed_in is None:
             print('Please specify immersed_in, the index of the layer \nsurrounding this inclusion.')
         try:
-            inclusion = Inclusion(stlfile=inclusion_stlfile,mesh=mesh,pars=pars,
+            inclusion = Inclusion(stlfile=stlfile,mesh=mesh,pars=pars,
                               density=self.densities[material],layer_type=layer_type,
                               material=material,immersed_in=immersed_in)
             self.layers.append(inclusion)
@@ -277,17 +294,19 @@ class Morphology():
             # layer type "Medium" is invisible
             if isinstance(layer,Medium):
                 continue
-            if layer.layer_type == 'surface':
+            elif layer.pars.layer_type == 'surface':
                 nfaces = layer.mesh.areas.shape[0]
                 colors = np.zeros([nfaces,3])
                 colors[:,0] = layer.rel_speed.flatten()
                 colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
-            elif layer.layer_type == 'lipid':
+            elif layer.pars.material == 'lipid':
                 colors = np.asarray([0.,1.,1.])
-            elif layer.layer_type == 'calcite':
+            elif layer.pars.material == 'calcite':
                 colors = 'gray'
-            elif layer.layer_type == 'seawater':
+            elif layer.pars.material == 'seawater':
                 colors = np.asarray([0.3,0.3,0.3])
+            else:
+                print('Unknown layer material in plot_layers; skipping layer {}'.format(i))
             axes.add_collection3d(mplot3d.art3d.Poly3DCollection(layer.mesh.vectors,
                                                                  shade=False,
                                                                  facecolors=colors,
