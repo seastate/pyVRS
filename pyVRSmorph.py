@@ -5,7 +5,7 @@
 
 from stl import mesh
 from mpl_toolkits import mplot3d
-from matplotlib import pyplot
+from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 import numpy as np
 import math
@@ -184,11 +184,12 @@ class Inclusion(Layer):
         the specified surrounding Layer. This assumption arises in calculations
         of gravity and buoyancy centers and forces.
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},
+    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='seawater',
                  density=1070.,sing=True,control=True,**kwargs):
-        super().__init__(stlfile,mesh,pars,**kwargs)
+        super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
         #print(self.pars)
         self.pars.density = density
+        self.pars.layer_type = layer_type
         print('Created Inclusion object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
@@ -196,15 +197,16 @@ class Medium(Layer):
     """ A derived class to contain the properties of the medium (ambient seawater,
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},
+    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='seawater',
                  density=1070.,nu = 1.17e-6,**kwargs):
-        super().__init__(stlfile,mesh,pars,**kwargs)
+        super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
         #print(self.pars)
         #nu = 1.17e-6    #   Kinematic viscosity, meters^2/second
-        mu = nu * rho 
+        mu = nu * density
         self.pars.density = density
         self.pars.nu = nu
         self.pars.mu = mu
+        self.pars.layer_type = layer_type
         print('Created Medium object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
@@ -213,12 +215,12 @@ class Morphology():
         ciliated and unciliated surfaces, inclusions and internal gaps, and various material
         densities.
     """
-    def __init__(self,surface_stlfile=None,inclusion_stlfiles=[],densities={},**kwargs):
+    def __init__(self,densities={},**kwargs):
         """ Create a morphology instance, using an AttrDict object.
  
         """
         super().__init__(**kwargs)
-        base_densities={'water':1030,
+        base_densities={'seawater':1030,
                    'tissue':1070,
                    'lipid':900,
                    'calcite':2669}
@@ -227,10 +229,9 @@ class Morphology():
         self.densities.update(densities)
         # Add an attribute to store Layers. The medium (typically
         # ambient seawater) is always the 0th layer
-        self.layers = [Medium(density=densities['water'])]
+        self.layers = [Medium(density=self.densities['seawater'])]
 
-
-    def gen_surface(self,surface_stlfile=None,mesh=None,pars={},
+    def gen_surface(self,stlfile=None,mesh=None,pars={},
                         layer_type='surface',get_points=True,
                         material='tissue',immersed_in=0):
         """A method to facilitate generating Surface objects to iniate
@@ -239,7 +240,7 @@ class Morphology():
            layer index 0.
         """
         try:
-            surface = Surface(stlfile=surface_stlfile,mesh=mesh,pars=pars,
+            surface = Surface(stlfile=stlfile,mesh=mesh,pars=pars,
                               density=self.densities[material],
                               layer_type=layer_type,get_points=get_points,
                               material=material,immersed_in=immersed_in)
@@ -249,7 +250,7 @@ class Morphology():
             print('Failed to load file to generate a Surface object...')
 
         
-    def gen_inclusion(self,surface_stlfile=None,mesh=None,pars={},
+    def gen_inclusion(self,stlfile=None,mesh=None,pars={},
                         layer_type='inclusion',
                         material='seawater',immersed_in=None):
         """A method to facilitate generating Inclusion objects within a surface
@@ -271,7 +272,11 @@ class Morphology():
 
 
     def plot_layers(self,axes,alpha=0.5,autoscale=True):
-        for layer in self.layers: # layer type "Medium" is invisible
+        for i,layer in enumerate(self.layers):
+            print(i,type(layer))
+            # layer type "Medium" is invisible
+            if isinstance(layer,Medium):
+                continue
             if layer.layer_type == 'surface':
                 nfaces = layer.mesh.areas.shape[0]
                 colors = np.zeros([nfaces,3])
@@ -282,7 +287,7 @@ class Morphology():
             elif layer.layer_type == 'calcite':
                 colors = 'gray'
             elif layer.layer_type == 'seawater':
-                colors = np.asarray([0.3.,0.3,0.3])
+                colors = np.asarray([0.3,0.3,0.3])
             axes.add_collection3d(mplot3d.art3d.Poly3DCollection(layer.mesh.vectors,
                                                                  shade=False,
                                                                  facecolors=colors,

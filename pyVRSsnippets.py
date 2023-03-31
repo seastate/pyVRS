@@ -7,10 +7,21 @@ import math
 
 pyplot.ion()
 
-
-
-
 from pyVRSmorph import *
+
+figure = pyplot.figure()
+axes = figure.add_subplot(projection='3d')
+
+
+M = Morphology()
+
+M.gen_surface(stlfile='/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_2.000000e+00_1.250000e-01_1.500000e+00_3.125000e-02_7.519608e-01_int.stl')
+M.plot_layers(axes=axes)
+
+scale = M.layers[1].mesh.points.flatten()
+axes.auto_scale_xyz(scale, scale, scale)
+
+
 
 s = Surface(stlfile='/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_2.000000e+00_1.250000e-01_1.500000e+00_3.125000e-02_7.519608e-01_int.stl')
 
@@ -32,8 +43,6 @@ ux = s.rel_Ucilia[:,0]
 uy = s.rel_Ucilia[:,1]
 uz = s.rel_Ucilia[:,2]
 
-figure = pyplot.figure()
-axes = figure.add_subplot(projection='3d')
 
 axes.cla()
 
