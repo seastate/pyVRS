@@ -95,7 +95,7 @@ class Layer():
             self.mesh.update_units()
         if areas:
             self.mesh.update_areas()
-            self.areas = self.mesh.areas
+            #self.areas = self.mesh.areas
         if centroids:
             self.mesh.update_centroids()
         if normals and not areas: # areas updates normals automatically
@@ -287,8 +287,9 @@ class Morphology():
         except:
             print('Failed to load file to generate a Inclusion object...')
 
-
     def plot_layers(self,axes,alpha=0.5,autoscale=True):
+        """A method to simplify basic 3D visualizatioin of larval morphologies.
+        """
         for i,layer in enumerate(self.layers):
             print(i,type(layer))
             # layer type "Medium" is invisible
@@ -315,5 +316,8 @@ class Morphology():
                 axes.autoscale_view()
 
 
-
+    def flow_calcs(self,):
+        """A method to calculate force and moment distributions for hydrodynamic simulations.
+        """
+        pass
 
