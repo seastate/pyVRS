@@ -18,7 +18,7 @@ estl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.2
 istl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_int.stl'
 
 M.gen_surface(stlfile=estl)
-M.gen_inclusion(stlfile=istl,immersed_in=1)
+M.gen_inclusion(stlfile=istl,material='lipid',immersed_in=1)
 M.plot_layers(axes=axes)
 
 scale = M.layers[1].mesh.points.flatten()
