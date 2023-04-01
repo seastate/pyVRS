@@ -12,6 +12,8 @@ import math
 
 from attrdict import AttrDict
 
+from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS
+
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
 # in 3D, due to @Jochemspek,
@@ -316,8 +318,307 @@ class Morphology():
                 axes.autoscale_view()
 
 
-    def flow_calcs(self,):
+    def flow_calcs(self,surface_layer=1):
         """A method to calculate force and moment distributions for hydrodynamic simulations.
+           surface_layer is the index of the layer to be used as the ciliated surface.
         """
-        pass
+        #global Q Q_inv
+        #global P1 P2 radii Fcyl U_cilia cil_speed E_norm
+        #global P_center P1 P2 radii F_center
+        #global V_larva U_const S
+
+        # Extract properties of ambient fluid
+        immersed_in = self.layers[surface_layer].pars['immersed_in']
+        mu = self.layers[immersed_in].pars['mu']
+        nu = self.layers[immersed_in].pars['nu']
+        density = self.layers[immersed_in].pars['density']
+        
+        # Construct influence matrix
+        print('Assembling influence matrix')
+        #n_vert = size(VRS_morph(1).vertices,1)
+        nfaces = self.layers[surface_layer].mesh.areas.shape[0] #size(VRS_morph(1).faces,1)
+
+        Q11 = np.zeros([nfaces,nfaces])
+        Q12 = np.zeros([nfaces,nfaces])
+        Q13 = np.zeros([nfaces,nfaces])
+        Q21 = np.zeros([nfaces,nfaces])
+        Q22 = np.zeros([nfaces,nfaces])
+        Q23 = np.zeros([nfaces,nfaces])
+        Q31 = np.zeros([nfaces,nfaces])
+        Q32 = np.zeros([nfaces,nfaces])
+        Q33 = np.zeros([nfaces,nfaces])
+
+        for iface in range(nfaces):
+            U1,U2,U3 = Stokeslet_shape(self.layers[surface_layer].ctrlpts,
+                                       self.layers[surface_layer].singpts[iface,:].reshape([1,3]),
+                                       np.ones([1,3]),mu)
+            #[U1,U2,U3] = Stokeslet_shape(VRS_morph(1).vertices_skin,VRS_morph(1).vertices_sing(iface,:),[1 1 1])
+    
+            #  The function [U1,U2,U3] = Stokeslet_shape(X,P,alpha) returns the
+            #  velocities at points X induced by Stokeslets at points P with
+            #  strengths alpha.
+            #
+            #  Note that U1, U2 and U3 represent the separated contributions of
+            #  alpha1, alpha2 and alpha3.
+            #
+            #  Also, note that alpha represents forces exerted on the fluid. The
+            #  forces exerted on an immersed object are equal and opposite.
+            
+            #	Qij(k,n) is the influence of i-direction force at the nth sing point upon the j-direction velocity
+	    #	at the kth skin point
+            
+            Q11[:,iface] = U1[:,0]
+            Q21[:,iface] = U1[:,1]
+            Q31[:,iface] = U1[:,2]
+            
+            Q12[:,iface] = U2[:,0]
+            Q22[:,iface] = U2[:,1]
+            Q32[:,iface] = U2[:,2]
+            
+            Q13[:,iface] = U3[:,0]
+            Q23[:,iface] = U3[:,1]
+            Q33[:,iface] = U3[:,2]
+
+        #  Now, Q * F = U, where F is the set of forces at singularity points P and
+        #  U is the set of velocities at control points X (in the call to
+        #  Stokeslet_shape).
+        self.layers[surface_layer].Q = np.concatenate((np.concatenate((Q11,Q12,Q13),axis=1),
+                            np.concatenate((Q21,Q22,Q23),axis=1),
+                            np.concatenate((Q31,Q32,Q33),axis=1)),
+                           axis=0)
+
+        
+        #	Calculate its inverse...
+        print('Calculating inverse...')
+        #  Hence, F = Q_inv * U is the set of forces at singularity points P
+        #  required to induce velocities U at control points X.
+        self.layers[surface_layer].Q_inv = np.linalg.inv(self.layers[surface_layer].Q)
+        print('Done calculating inverse.')
+
+        #==========================================================================
+        #==========================================================================
+        # Set up zero external flow and motion; then calculate indirect forces on larva due to 
+        # cilia and add it to direct forces.
+        U_const = np.zeros([1,3])
+        S = np.zeros(9)      # Vector of shear velocities
+        #S = np.zeros([1,9])      # Vector of shear velocities
+        #S = np.zeros([9,1])      # Vector of shear velocities
+        V_L = np.asarray([0,0,0])
+        Omega_L = np.asarray([0,0,0])
+        #V_larva = larval_V(P_center,V_L,Omega_L)
+        cil_speed = 1
+        F_cilia_indirect,M_cilia_indirect = solve_flowVRS(self.layers[surface_layer],
+                                                          V_L,Omega_L,
+                                                          cil_speed,U_const,S)
+        F_cilia = F_cilia_indirect
+        M_cilia = M_cilia_indirect
+        self.layers[surface_layer].F_total_cilia = np.sum(F_cilia,1)
+        self.layers[surface_layer].M_total_cilia = np.sum(M_cilia,1)
+        #-------------------------------------------
+        # Calculate the matrix K_CF, which is the matrix of forces resulting from 
+        # external constant velocities.
+        V_L = np.asarray([0,0,0])
+        Omega_L = np.asarray([0,0,0])
+        #V_larva = larval_V(P_center,V_L,Omega_L)
+        cil_speed = 0
+        S = np.zeros(9)   # Vector of shear velocities
+      
+        U_const = np.asarray([1,0,0])
+        #[F_C1,M_C1] = solve_flowVRS
+        F_C1,M_C1 = solve_flowVRS(self.layers[surface_layer],
+                                  V_L,Omega_L,
+                                  cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_C1 = np.sum(F_C1,axis=0,keepdims=True) 
+        self.layers[surface_layer].M_total_C1 = np.sum(M_C1,axis=0,keepdims=True) 
+        
+        U_const = np.asarray([0,1,0])
+        #[F_C2,M_C2] = solve_flowVRS
+        F_C2,M_C2 = solve_flowVRS(self.layers[surface_layer],
+                                  V_L,Omega_L,cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_C2 = np.sum(F_C2,axis=0,keepdims=True) 
+        self.layers[surface_layer].M_total_C2 = np.sum(M_C2,axis=0,keepdims=True) 
+        
+        U_const = np.asarray([0,0,1])
+        #[F_C3,M_C3] = solve_flowVRS
+        F_C3,M_C3 = solve_flowVRS(self.layers[surface_layer],
+                                  V_L,Omega_L,cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_C3 = np.sum(F_C3,axis=0,keepdims=True) 
+        self.layers[surface_layer].M_total_C3 = np.sum(M_C3,axis=0,keepdims=True) 
+        
+        #  This will be 3x6 when moments are added for forces
+        self.layers[surface_layer].K_FC = np.concatenate((self.layers[surface_layer].F_total_C1.T,
+                                                          self.layers[surface_layer].F_total_C2.T,
+                                                          self.layers[surface_layer].F_total_C3.T),axis=1)	
+        self.layers[surface_layer].K_MC = np.concatenate((self.layers[surface_layer].M_total_C1.T,
+                                                          self.layers[surface_layer].M_total_C2.T,
+                                                          self.layers[surface_layer].M_total_C3.T),axis=1)
+        self.layers[surface_layer].K_C = np.concatenate((self.layers[surface_layer].K_FC,self.layers[surface_layer].K_MC),axis=0)
+
+        #-------------------------------------------
+        #	Calculate the matrix K_S, which is the matrix of forces and moments resulting from 
+        #	external shear velocities.
+        #	There are nine cases: du1/dx1,du1/dx2,du1/dx3,
+        #                         du2/dx1,du2/dx2,du2/dx3,
+        #                         du3/dx1,du3/dx2,du3/dx3
+        U_const = np.zeros([1,3])
+        V_L = np.asarray([0,0,0])
+        Omega_L = np.asarray([0,0,0])
+        cil_speed = 0
+        self.layers[surface_layer].K_FS = np.zeros([3,9])	
+        self.layers[surface_layer].K_MS = np.zeros([3,9])	
+
+        #F_S = np.zeros([nfaces,3,9])
+        #M_S = np.zeros([nfaces,3,9])
+        ##F_S = repmat(NaN,[size(P_center,1),3,9])
+        ##M_S = repmat(NaN,[size(P_center,1),3,9])
+
+        for i_S in range(9):
+            S = np.zeros([9,1])      # Vector of shear velocities
+            S[i_S] = 1		#	Vector of shear velocities	
+            #[F_S1,M_S1] = solve_flowVRS
+            F_S1,M_S1 = solve_flowVRS(self.layers[surface_layer],
+                                      V_L,Omega_L,cil_speed,U_const,S)
+            #F_S[:,:,i_S] = F_S1
+            #M_S[:,:,i_S] = M_S1
+            self.layers[surface_layer].F_total_S1 = np.sum(F_S1,axis=0)
+            self.layers[surface_layer].M_total_S1 = np.sum(M_S1,axis=0)
+            
+            self.layers[surface_layer].K_FS[:,i_S] = self.layers[surface_layer].F_total_S1.T
+            self.layers[surface_layer].K_MS[:,i_S] = self.layers[surface_layer].M_total_S1.T
+            
+        self.layers[surface_layer].K_S = np.concatenate((self.layers[surface_layer].K_FS,
+                                                         self.layers[surface_layer].K_MS),axis=0)
+
+        #-------------------------------------------
+        #  Calculate the matrix K_FV, which is the matrix of forces resulting from translational velocities
+        #  Zero external flow; unit larval translation in the x direction; no rotation; zero ciliary action
+        U_const = np.zeros([1,3])
+        Omega_L = np.asarray([0,0,0])
+        cil_speed = 0
+        S = np.zeros([9,1])      # Vector of shear velocities
+
+        V_L = np.asarray([1,0,0])
+        F_trans1,M_trans1 = solve_flowVRS(self.layers[surface_layer],
+                                          V_L,Omega_L,cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_trans1 = np.sum(F_trans1,axis=0,keepdims=True) 
+        self.layers[surface_layer].M_total_trans1 = np.sum(M_trans1,axis=0,keepdims=True) 
+#	Zero external flow; unit larval translation in the y direction; no rotation; zero ciliary action
+        V_L = np.asarray([0,1,0])
+        F_trans2,M_trans2 = solve_flowVRS(self.layers[surface_layer],
+                                          V_L,Omega_L,cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_trans2 = np.sum(F_trans1,axis=0,keepdims=True) 
+        self.layers[surface_layer].M_total_trans2 = np.sum(M_trans1,axis=0,keepdims=True) 
+#	Zero external flow; unit larval translation in the z direction; no rotation; zero ciliary action
+        V_L = np.asarray([0,0,1])
+        F_trans3,M_trans3 = solve_flowVRS(self.layers[surface_layer],
+                                          V_L,Omega_L,cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_trans3 = np.sum(F_trans1,axis=0,keepdims=True) 
+        self.layers[surface_layer].M_total_trans3 = np.sum(M_trans1,axis=0,keepdims=True) 
+#	Zero external flow; unit larval rotation in the x direction; no translation; zero ciliary action
+        V_L = np.asarray([0,0,0])
+        Omega_L = np.asarray([1,0,0])
+        F_rot1,M_rot1 = solve_flowVRS(self.layers[surface_layer],
+                                      V_L,Omega_L,cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_rot1 = np.sum(F_rot1,axis=0,keepdims=True)
+        self.layers[surface_layer].M_total_rot1 = np.sum(M_rot1,axis=0,keepdims=True)
+#	Zero external flow; unit larval rotation in the y direction; no translation; zero ciliary action
+        Omega_L = np.asarray([0,1,0])
+        F_rot2,M_rot2 = solve_flowVRS(self.layers[surface_layer],
+                                      V_L,Omega_L,cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_rot2 = np.sum(F_rot2,axis=0,keepdims=True)
+        self.layers[surface_layer].M_total_rot2 = np.sum(M_rot2,axis=0,keepdims=True)
+#	Zero external flow; unit larval rotation in the z direction; no translation; zero ciliary action
+        Omega_L = np.asarray([0,0,1])
+        F_rot3,M_rot3 = solve_flowVRS(self.layers[surface_layer],
+                                      V_L,Omega_L,cil_speed,U_const,S)
+        self.layers[surface_layer].F_total_rot3 = np.sum(F_rot2,axis=0,keepdims=True)
+        self.layers[surface_layer].M_total_rot3 = np.sum(M_rot2,axis=0,keepdims=True)
+
+        self.layers[surface_layer].K_FV = np.concatenate((self.layers[surface_layer].F_total_trans1.T,
+                                                          self.layers[surface_layer].F_total_trans2.T,
+                                                          self.layers[surface_layer].F_total_trans3.T),axis=1)
+        self.layers[surface_layer].K_MV = np.concatenate((self.layers[surface_layer].M_total_trans1.T,
+                                                          self.layers[surface_layer].M_total_trans2.T,
+                                                          self.layers[surface_layer].M_total_trans3.T),axis=1)
+        
+        self.layers[surface_layer].K_FW = np.concatenate((self.layers[surface_layer].F_total_rot1.T,
+                                                          self.layers[surface_layer].F_total_rot2.T,
+                                                          self.layers[surface_layer].F_total_rot3.T),axis=1)
+        self.layers[surface_layer].K_MW = np.concatenate((self.layers[surface_layer].M_total_rot1.T,
+                                                          self.layers[surface_layer].M_total_rot2.T,
+                                                          self.layers[surface_layer].M_total_rot3.T),axis=1)
+
+        self.layers[surface_layer].K_VW = np.concatenate((np.concatenate((self.layers[surface_layer].K_FV,
+                                                                          self.layers[surface_layer].K_FW),axis=1),
+                                                          np.concatenate((self.layers[surface_layer].K_MV,
+                                                                          self.layers[surface_layer].K_MW),axis=1))
+                                                         ,axis=0)
+        # K_VW = [[K_FV,K_MV];[K_FW,K_MW]]
+
+        #K_FV = [F_total_trans1', F_total_trans2', F_total_trans3']
+        #K_MV = [M_total_trans1', M_total_trans2', M_total_trans3']
+        # 
+        #K_FW = [F_total_rot1', F_total_rot2', F_total_rot3']
+        #K_MW = [M_total_rot1', M_total_rot2', M_total_rot3']
+        #
+        #K_VW = [[K_FV,K_FW];[K_MV,K_MW]]
+        ## K_VW = [[K_FV,K_MV];[K_FW,K_MW]]
+
+#-------------------------------------------
+'''
+VRS_morph(1).F_total_cilia = F_total_cilia
+VRS_morph(1).M_total_cilia = M_total_cilia
+
+VRS_morph(1).F_cilia_indirect = F_cilia_indirect
+VRS_morph(1).M_cilia_indirect = M_cilia_indirect
+
+VRS_morph(1).F_C1 = F_C1
+VRS_morph(1).M_C1 = M_C1
+
+VRS_morph(1).F_C2 = F_C2
+VRS_morph(1).M_C2 = M_C2
+
+VRS_morph(1).F_C3 = F_C3
+VRS_morph(1).M_C3 = M_C3
+
+VRS_morph(1).F_trans1 = F_trans1
+VRS_morph(1).M_trans1 = M_trans1
+
+VRS_morph(1).F_trans2 = F_trans2
+VRS_morph(1).M_trans2 = M_trans2
+
+VRS_morph(1).F_trans3 = F_trans3
+VRS_morph(1).M_trans3 = M_trans3
+
+VRS_morph(1).F_rot1 = F_rot1
+VRS_morph(1).M_rot1 = M_rot1
+
+VRS_morph(1).F_rot2 = F_rot2
+VRS_morph(1).M_rot2 = M_rot2
+
+VRS_morph(1).F_rot3 = F_rot3
+VRS_morph(1).M_rot3 = M_rot3
+
+
+VRS_morph(1).F_S = F_S
+VRS_morph(1).M_S = M_S
+
+
+
+
+VRS_morph(1).K_C = K_C
+VRS_morph(1).K_S = K_S
+VRS_morph(1).K_VW = K_VW
+
+
+#====================================================
+#====================================================
+
+
+VRS_morph_sav = VRS_morph
+tmp = ['save ',directory,filesep,prefix,suffix,' VRS_morph_sav -mat']
+eval(tmp)
+'''
+
+
 

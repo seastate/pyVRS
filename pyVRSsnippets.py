@@ -1,3 +1,5 @@
+
+
 from stl import mesh
 from mpl_toolkits import mplot3d
 from matplotlib import pyplot
@@ -23,6 +25,31 @@ M.plot_layers(axes=axes)
 
 scale = M.layers[1].mesh.points.flatten()
 axes.auto_scale_xyz(scale, scale, scale)
+
+M.flow_calcs(surface_layer=1)
+
+
+
+#================================================================
+
+from stl import mesh
+import numpy as np
+import math
+from pyVRSmorph import *
+
+M = Morphology()
+estl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_ext.stl'
+istl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_int.stl'
+
+M.gen_surface(stlfile=estl)
+M.gen_inclusion(stlfile=istl,material='lipid',immersed_in=1)
+M.flow_calcs(surface_layer=1)
+
+#================================================================
+
+
+
+
 
 
 
