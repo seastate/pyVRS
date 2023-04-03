@@ -128,21 +128,21 @@ def solve_flowVRS(surface,V_L,Omega_L,cil_speed,U_const,S):
     #  F is the set of forces ON THE FLUID necessary to induces those velocities.
     F = surface.Q_inv.dot(U)
     #F = surface.Q_inv * U
-    print(U.shape,surface.Q_inv.shape,F.shape)
+    #print(U.shape,surface.Q_inv.shape,F.shape)
     #  Forces on the organism are equal and opposite
     Fpt = np.ones([nc,3])
-    print(Fpt[:,0].shape,F[0:nc].flatten().shape)
+    #print(Fpt[:,0].shape,F[0:nc].flatten().shape)
     Fpt[:,0] = -F[0:nc].flatten()
     Fpt[:,1] = -F[nc:2*nc].flatten()
     Fpt[:,2] = -F[2*nc:3*nc].flatten()
     Fpt_ = -F.reshape([nc,3])
     Fpt_T = -F.T.reshape([nc,3])
-    print('Fpt = ',Fpt)
-    print('Fpt_ = ',Fpt_)
-    print('Fpt_T = ',Fpt_T)
+    #print('Fpt = ',Fpt)
+    #print('Fpt_ = ',Fpt_)
+    #print('Fpt_T = ',Fpt_T)
     #   Calculate moments from the positions of the singularities:
-    print(surface.singpts.shape,Fpt.shape)
+    #print(surface.singpts.shape,Fpt.shape)
     Mpt = np.cross(surface.singpts,Fpt)
-    print(Mpt.shape)
+    #print(Mpt.shape)
     #Mpt = cross(F_center,Fpt,2)
     return Fpt,Mpt

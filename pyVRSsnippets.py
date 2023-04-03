@@ -25,7 +25,6 @@ M.plot_layers(axes=axes)
 
 scale = M.layers[1].mesh.points.flatten()
 axes.auto_scale_xyz(scale, scale, scale)
-
 M.flow_calcs(surface_layer=1)
 
 
@@ -43,6 +42,7 @@ istl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.2
 
 M.gen_surface(stlfile=estl)
 M.gen_inclusion(stlfile=istl,material='lipid',immersed_in=1)
+M.body_calcs()
 M.flow_calcs(surface_layer=1)
 
 #================================================================

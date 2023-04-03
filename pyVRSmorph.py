@@ -41,14 +41,16 @@ class Layer():
         or excluding morphological features of a swimming organism) for
         hydrodynamic modeling. 
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},layer_type=None,**kwargs):
+    def __init__(self,stlfile=None,mesh=None,pars={},layer_type=None,
+                 material=None,density=None,immersed_in=None,**kwargs):
         """ Create a layer instance, using an AttrDict object.
         """
         super().__init__(**kwargs)
         # Default base parameters
-        base_pars={'density':None,
-                   'material':None,
-                   'immersed_in':None,
+        base_pars={'density':density,
+                   'material':material,
+                   'immersed_in':immersed_in,
+                   'contains':[],
                    'scale_factor':1,
                    'offset':np.array([0,0,0]),
                    'rotate':np.array([0,0,0,0])}
@@ -148,11 +150,11 @@ class Surface(Layer):
                  density=1070.,material='tissue',immersed_in=0,
                  get_points=True,
                  tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
+        super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,**kwargs)
         #print(self.pars)
-        self.pars.density = density
-        self.pars.material = material
-        self.pars.immersed_in = immersed_in
+        #self.pars.density = density
+        #self.pars.material = material
+        #self.pars.immersed_in = immersed_in
         self.pars.tetra_project = tetra_project
         self.pars.tetra_project_min = tetra_project_min
         print('Created Surface object with parameters:\n{}'.format(self.pars))
@@ -193,11 +195,8 @@ class Inclusion(Layer):
     """
     def __init__(self,stlfile=None,mesh=None,pars={},layer_type='inclusion',
                  density=1070.,material='seawater',immersed_in=None,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
+        super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,**kwargs)
         #print(self.pars)
-        self.pars.density = density
-        self.pars.layer_type = layer_type
-        self.pars.material = material
         print('Created Inclusion object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
@@ -207,14 +206,12 @@ class Medium(Layer):
     """
     def __init__(self,stlfile=None,mesh=None,pars={},layer_type='medium',
                  density=1070.,material='seawater',nu = 1.17e-6,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,**kwargs)
+        super().__init__(stlfile,mesh,pars,layer_type,material,density,**kwargs)
         #print(self.pars)
         #nu = 1.17e-6    #   Kinematic viscosity, meters^2/second
         mu = nu * density
-        self.pars.density = density
         self.pars.nu = nu
         self.pars.mu = mu
-        self.pars.material = material
         print('Created Medium object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
@@ -223,7 +220,7 @@ class Morphology():
         ciliated and unciliated surfaces, inclusions and internal gaps, and various material
         densities.
     """
-    def __init__(self,densities={},**kwargs):
+    def __init__(self,densities={},g=9.81,**kwargs):
         """ Create a morphology instance, using an AttrDict object.
  
         """
@@ -235,6 +232,7 @@ class Morphology():
         # Update with passed parameters
         self.densities=AttrDict(base_densities)
         self.densities.update(densities)
+        self.g = g # Include as an argument for units flexibility
         # Add an attribute to store Layers. The medium (typically
         # ambient seawater) is always the 0th layer
         self.layers = [Medium(density=self.densities['seawater'])]
@@ -258,12 +256,14 @@ class Morphology():
            layer index 0.
         """
         try:
+            nlayers = len(self.layers)
             surface = Surface(stlfile=stlfile,mesh=mesh,pars=pars,
                               density=self.densities[material],
                               layer_type=layer_type,get_points=get_points,
                               material=material,immersed_in=immersed_in)
             self.layers.append(surface)
-            #print('Added surface {} to layers list with parameters\n{}'.format(len(self.layers)-1),surface.pars)
+            # Add new layer to the layer which contains it
+            self.layers[surface.pars.immersed_in].pars['contains'].append(nlayers)
             print('Added surface to layers list:')
             self.print_layer(layer_list=[-1]) #[len(self.layers)-1])
         except:
@@ -281,10 +281,14 @@ class Morphology():
         if immersed_in is None:
             print('Please specify immersed_in, the index of the layer \nsurrounding this inclusion.')
         try:
+            nlayers = len(self.layers)
             inclusion = Inclusion(stlfile=stlfile,mesh=mesh,pars=pars,
                               density=self.densities[material],layer_type=layer_type,
                               material=material,immersed_in=immersed_in)
             self.layers.append(inclusion)
+            # Add new layer to the layer which contains it
+            print('Adding new layer to container...')
+            self.layers[immersed_in].pars['contains'].append(nlayers)
             print('Added inclusion {} to layers list...'.format(len(self.layers)-1))
         except:
             print('Failed to load file to generate a Inclusion object...')
@@ -293,7 +297,7 @@ class Morphology():
         """A method to simplify basic 3D visualizatioin of larval morphologies.
         """
         for i,layer in enumerate(self.layers):
-            print(i,type(layer))
+            print('Layer {} of type {}'.format(i,type(layer)))
             # layer type "Medium" is invisible
             if isinstance(layer,Medium):
                 continue
@@ -318,15 +322,60 @@ class Morphology():
                 axes.autoscale_view()
 
 
+    def body_calcs(self):
+        """A method to calculate body forces and moments (due to gravity and buoyancy)
+           for hydrodynamic simulations. It's assumed that (i) layers of type "surface"
+           are exposed to the medium; (ii) layers of type "inclusion" always occur within
+           layers of types surface or inclusion; and, no layer intersects another layer.
+        """
+        for i,layer in enumerate(self.layers):
+            print('Layer {} of type {}'.format(i,type(layer)))
+            # layer type "Medium" does not have body forces
+            if isinstance(layer,Medium):
+                continue
+            # Because only surface type layers (which displace medium layers) have
+            # buoyancy, accounting is done by surfaces. The "contains" list is used
+            # to sequentially calculate body forces due to inclusions.
+            elif layer.pars.layer_type == 'surface':
+                immersed_in = layer.pars['immersed_in']
+                density = layer.pars['density']
+                density_immersed_in = self.layers[immersed_in].pars['density']
+                #density_diff = density - density_immersed
+                # Buoyancy forces are due to displacement by the surface
+                layer.pars.F_buoyancy = self.g * density_immersed_in * layer.pars['volume']
+                layer.pars.C_buoyancy = layer.pars['cog']
+                print('F_buoyancy = ',layer.pars.F_buoyancy)
+                print('C_buoyancy = ',layer.pars.C_buoyancy)
+                # begin calculation of gravity forces; CoG's of included layers are weighted by mass
+                layer.pars.F_gravity = -self.g * density * layer.pars['volume']
+                layer.pars.C_gravity = self.g*density*layer.pars['volume'] * layer.pars['cog']
+                # Get a list of all inclusions
+                all_inclusions = []
+                new_inclusions = list(layer.pars.contains)
+                while len(new_inclusions)>0:
+                    new_incl = new_inclusions.pop(0)
+                    all_inclusions.append(new_incl)
+                    new_inclusions.extend(list(self.layers[new_incl].pars.contains))
+                print('List of all inclusions is: ',all_inclusions)
+                for i in all_inclusions:
+                    immersed_in = self.layers[i].pars['immersed_in']
+                    density = self.layers[i].pars['density']
+                    density_immersed_in = self.layers[immersed_in].pars['density']
+                    density_diff = density - density_immersed_in
+                    layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['volume']
+                    layer.pars.C_gravity = self.g*density_diff*layer.pars['volume'] * layer.pars['cog']
+                print('F_gravity = ',layer.pars.F_gravity)
+                print('C_gravity = ',layer.pars.C_gravity)
+            elif layer.pars.layer_type == 'inclusion':
+                pass  # inclusions are accounted for in calculations for their enclosing surface
+            else:
+                msg = 'Unknown layer type in body_calcs in layer {}'.format(i)
+                raise ValueError(msg)
+
     def flow_calcs(self,surface_layer=1):
         """A method to calculate force and moment distributions for hydrodynamic simulations.
            surface_layer is the index of the layer to be used as the ciliated surface.
         """
-        #global Q Q_inv
-        #global P1 P2 radii Fcyl U_cilia cil_speed E_norm
-        #global P_center P1 P2 radii F_center
-        #global V_larva U_const S
-
         # Extract properties of ambient fluid
         immersed_in = self.layers[surface_layer].pars['immersed_in']
         mu = self.layers[immersed_in].pars['mu']
