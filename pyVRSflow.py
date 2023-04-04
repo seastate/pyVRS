@@ -9,6 +9,8 @@ from matplotlib import pyplot
 from matplotlib.colors import LightSource
 import numpy as np
 #import math
+from math import ceil
+from scipy.integrate import odeint
 
 from attrdict import AttrDict
 
@@ -146,3 +148,216 @@ def solve_flowVRS(surface,V_L,Omega_L,cil_speed,U_const,S):
     #print(Mpt.shape)
     #Mpt = cross(F_center,Fpt,2)
     return Fpt,Mpt
+
+#==============================================================================
+def foo():
+    """A test function to experiment with function attributes as static vairables
+    """
+    try:
+        foo.counter += 1
+    except AttributeError:
+        foo.counter = 1
+
+class Foo(object):
+    # Class variable, shared by all instances of this class
+    counter = 0
+    blah = 'blah'
+    
+    def __call__(self):
+        Foo.counter += 1
+        print(Foo.counter)
+
+class Foo2():
+    def __init__(self):
+        self.counter = 0
+        self.blah = 'blah'
+    
+    def __call__(self):
+        self.counter += 1
+        print(self.counter)
+
+class Foo3():
+    def __init__(self):
+        self.counter = 0
+        self.blah = 'blah'
+    
+    def __call__(self,X):
+        self.counter += 1
+        print(self.counter,X)
+
+#==============================================================================
+class Flowfield():
+    """ This function specifies the external flowfield at the points in
+        the m x 3 ndarray X. U_const_fixed and S_fixed are the external
+        linearized flow parameters, in fixed (global) coordinates. In
+        this function they are preserved as an attribute, initialized
+        to default values when the function is called for the first time.
+       Thereafter, they can be set with e..g. flowfield.S_fixed = ...
+    """
+    def __init__(self,U_const_fixed = np.zeros([1,3]),
+                             S_fixed = np.zeros([1,9])):
+        self.U_const_fixed = U_const_fixed
+        self.S_fixed = S_fixed
+        
+    def __call__(self,X):
+        m = X.shape[0]
+        U_ext = U_const_fixed.reshape([1,3]).repeat(m,axis=0) \
+	    + [S_fixed[0]*X[:,0] + S_fixed[1]*X[:,1] + S_fixed[2]*X[:,2],
+	       S_fixed[3]*X[:,0] + S_fixed[4]*X[:,1] + S_fixed[5]*X[:,2],
+	       S_fixed[6]*X[:,0] + S_fixed[7]*X[:,1] + S_fixed[8]*X[:,2]]
+        return U_ext
+
+#==============================================================================
+'''
+def flowfield(X):
+    """ This function specifies the external flowfield at the points in
+        the m x 3 ndarray X. U_const_fixed and S_fixed are the external
+        linearized flow parameters, in fixed (global) coordinates. In
+        this function they are preserved as an attribute, initialized
+        to default values when the function is called for the first time.
+       Thereafter, they can be set with e..g. flowfield.S_fixed = ...
+    """
+    #global U_const_fixed S_fixed
+    try:
+        U_const_fixed = flowfield.U_const_fixed
+        S_fixed = flowfield.S_fixed
+    except:
+        flowfield.U_const_fixed = np.zeros([1,3])
+        flowfield.S_fixed = np.zeros([1,9])
+    m = X.shape[0]
+    U_ext = U_const_fixed.reshape([1,3]).repeat(m,axis=0) ...
+	  + [S_fixed[0]*X[:,0] + S_fixed[1]*X[:,1] + S_fixed[2]*X[:,2],
+	     S_fixed[3]*X[:,0] + S_fixed[4]*X[:,1] + S_fixed[5]*X[:,2],
+	     S_fixed[6]*X[:,0] + S_fixed[7]*X[:,1] + S_fixed[8]*X[:,2]]
+    return U_ext
+'''
+#==============================================================================
+def R_Euler(phi,theta,psi):
+    """	This function returns the 3 x 3 rotation matrix for the Euler angles phi, theta and psi.
+    """
+    R = np.zeros([3,3])
+    R[0,0] = cos(psi) * cos(phi) - cos(theta)*sin(phi)*sin(psi)
+    R[0,1] = cos(psi) * sin(phi) + cos(theta)*cos(phi)*sin(psi)
+    R[0,2] = sin(psi) * sin(theta)
+    R[1,0] = -sin(psi) * cos(phi) - cos(theta) * sin(phi) * cos(psi)
+    R[1,1] = -sin(psi) * sin(phi) + cos(theta) * cos(phi) * cos(psi)
+    R[1,2] = cos(psi) * sin(theta)
+    R[2,0] = sin(theta) * sin(phi)
+    R[2,1] = -sin(theta) * cos(phi)
+    R[2,2] = cos(theta)
+    return R
+
+#==============================================================================
+class VRSsim():
+    """ This class implements hydrodynamic simulations of swimming organisms
+        with characteristics specified in a Morphology object from the 
+        pyVRSmorph module. 
+    """
+    def __init__(self,XEinit=np.asarray([0,0,0,0,0,0]),Tmax=3*25,dt_plot=0.25,
+                 dt = 0.001,morph=None,flowfield=Flowfield):
+        U_const_fixed = [0 0 0]
+        self.tiny = 10**-7
+        self.U_const_fixed = U_const_fixed
+        self.S_fixed = S_fixed
+        self.dt = dt
+        self.dt_plot = dt_plot
+        self.XEinit = XEint
+        self.Tmax = Tmax
+        self.morph = morph
+        self.flowfield = flowfield
+
+        self.F_buoyancy = M.pars.F_buoyancy
+        self.C_buoyancy = M.pars.C_buoyancy
+        self.F_gravity = M.pars.F_gravity
+        self.C_gravity = M.pars.C_gravity
+
+    def run(self):
+        self.nsteps = ceil(self.Tmax/self.dt_plot)
+        XE = self.XEinit
+        for istep in range(self.nsteps):
+	    t_prev = istep*self.dt_plot
+	    t_next = min(istep*dt_plot,Tmax)
+            
+	    XE_old = XE
+            sol = odeint(self.Rotated_CoordsVRS,XE,[t_prev t_next])
+            #[t,XEbig] = ode15s('Rotated_CoordsVRS',[t_prev t_next],XE);
+            XE = XEbig[-1,:]
+            VEdot = self.Rotated_CoordsVRS(XE,t_next)
+    
+    def Rotated_CoordsVRS(self,XE,t):
+        """ This function calculates the translational velocity and time rate
+            of change of Euler angles for a larva immersed in flow.
+            The rotation matrix and its inverse are R and Rinv. Capital 
+            coordinates (e.g., X) are universal fixed, lower case is the
+            coordinate system embedded in the larva.
+        """
+        #global VRS_morph
+        #global VW
+        #global U_const_fixed	#	Constant component of external velocity, fixed coordinates
+        #global S_fixed	#	Constant component of external velocity, fixed coordinates
+        #global U_const S
+
+        R = R_Euler(XE[3],XE[4],XE[5])			#	The rotation of the larva relative to XYZ
+        Rinv = np.linalg.inv(R)	#	The rotation of XYZ relative to the larva
+
+        X0 = XE[0] 	#	The position of the base
+        Y0 = XE[1] 
+        Z0 = XE[2]
+        Xbase = np.asarray([X0,Y0,Z0]).reshape([1,3])
+
+        U_ext_fixed = self.flowfield(Xbase) #.reshape([3,1])	#	Velocity at the base in fixed coords
+        U_ext = R.dot(U_ext_fixed)				#	Velocity at the base in larval coords
+
+        #	Increments from the position of the base for estimating derivatives
+        X0p = Xbase + Rinv.dot(np.asarray([self.tiny 0 0]).reshape([3,1]))
+        Y0p = Xbase + Rinv.dot(np.asarray([0 self.tiny 0]).reshape([3,1]))
+        Z0p = Xbase + Rinv.dot(np.asarray([0 0 self.tiny]).reshape([3,1]))
+        Up1_ext_fixed = self.flowfield(X0p.T)
+        Up2_ext_fixed = self.flowfield(Y0p.T)
+        Up3_ext_fixed = self.flowfield(Z0p.T)
+        Up1_ext = R.dot(Up1_ext_fixed)
+        Up2_ext = R.dot(Up2_ext_fixed)
+        Up3_ext = R.dot(Up3_ext_fixed)
+
+        #	Estimate local shear in larval coords
+        S = np.zeros([9,1])
+        S[0] = (Up1_ext[0]-U_ext[0])/self.tiny
+        S[3] = (Up1_ext[1]-U_ext[1])/self.tiny
+        S[6] = (Up1_ext[2]-U_ext[2])/self.tiny
+
+        S[1] = (Up2_ext[0]-U_ext[0])/self.tiny
+        S[4] = (Up2_ext[1]-U_ext[1])/self.tiny
+        S[7] = (Up2_ext[2]-U_ext[2])/self.tiny
+
+        S[2] = (Up3_ext[0]-U_ext[0])/self.tiny
+        S[5] = (Up3_ext[1]-U_ext[1])/self.tiny
+        S[8] = (Up3_ext[2]-U_ext[2])/self.tiny
+
+        FM_body = np.zeros([6,1]);
+        FM_body[0:3] =  R.dot(self.F_buoyancy + self.F_gravity)
+        FM_body[3:6] = (cross(self.C_buoyancy,R * self.F_buoyancy) + cross(self.C_gravity,R * self.F_gravity));
+
+        #	Translational and rotational velocities in larva's coordinates (xyz)
+        vw = -self.K_VW \ (self.cil_speed * [self.F_total_cilia';self.M_total_cilia'] + self.K_C * U_ext + self.K_S * S + FM_body) 
+        #	Translational and rotational velocities in fixed coordinates (XYZ)
+        VW = [Rinv * vw(1:3);Rinv * vw(4:6)] 
+        #	Calculate rates of change in Euler angles corresponding to 
+        omega1 = vw(4)
+        omega2 = vw(5)
+        omega3 = vw(6)
+        # omega1 = VW(4)
+        # omega2 = VW(5)
+        # omega3 = VW(6)
+
+        phi = XE(4)
+        theta = XE(5)
+        psi = XE(6)
+
+        dphi_dt = cos(psi)/sin(theta) * omega2 + sin(psi)/sin(theta) * omega1
+        dtheta_dt = cos(psi)*omega1 - sin(psi) * omega2
+        dpsi_dt = -cos(theta)*cos(psi)/sin(theta) * omega2 - cos(theta)*sin(psi)/sin(theta) * omega1 + omega3
+
+
+        VEdot = [VW(1:3);[dphi_dt;dtheta_dt;dpsi_dt]]
+
+        return VEdot

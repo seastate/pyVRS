@@ -48,8 +48,42 @@ M.flow_calcs(surface_layer=1)
 #================================================================
 
 
+def foo():
+    try:
+        foo.counter += 1
+    except AttributeError:
+        foo.counter = 1
+    print(counter)
 
 
+def foo():
+    try:
+        foo.counter += 1
+    except AttributeError:
+        foo.counter = 1
+
+class Foo(object):
+  # Class variable, shared by all instances of this class
+  counter = 0
+
+  def __call__(self):
+    Foo.counter += 1
+    print Foo.counter
+
+# Create an object instance of class "Foo," called "foo"
+foo = Foo()
+
+# Make calls to the "__call__" method, via the object's name itself
+foo() #prints 1
+foo() #prints 2
+foo() #prints 3
+
+
+
+
+
+
+#================================================================
 
 
 
