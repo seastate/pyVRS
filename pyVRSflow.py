@@ -9,10 +9,12 @@ from matplotlib import pyplot
 from matplotlib.colors import LightSource
 import numpy as np
 #import math
-from math import ceil
+from math import ceil, sin, cos
 from scipy.integrate import odeint
 
 from attrdict import AttrDict
+
+pyplot.ion()
 
 
 #==============================================================================
@@ -208,8 +210,8 @@ class Flowfield():
         return U_ext
 
 #==============================================================================
-'''
-def flowfield(X):
+
+def flowfield2(X):
     """ This function specifies the external flowfield at the points in
         the m x 3 ndarray X. U_const_fixed and S_fixed are the external
         linearized flow parameters, in fixed (global) coordinates. In
@@ -219,18 +221,67 @@ def flowfield(X):
     """
     #global U_const_fixed S_fixed
     try:
-        U_const_fixed = flowfield.U_const_fixed
-        S_fixed = flowfield.S_fixed
+        U_const_fixed = flowfield2.U_const_fixed
+        S_fixed = flowfield2.S_fixed
     except:
-        flowfield.U_const_fixed = np.zeros([1,3])
-        flowfield.S_fixed = np.zeros([1,9])
+        flowfield2.U_const_fixed = np.zeros([1,3])
+        flowfield2.S_fixed = np.zeros([1,9])
     m = X.shape[0]
-    U_ext = U_const_fixed.reshape([1,3]).repeat(m,axis=0) ...
-	  + [S_fixed[0]*X[:,0] + S_fixed[1]*X[:,1] + S_fixed[2]*X[:,2],
-	     S_fixed[3]*X[:,0] + S_fixed[4]*X[:,1] + S_fixed[5]*X[:,2],
-	     S_fixed[6]*X[:,0] + S_fixed[7]*X[:,1] + S_fixed[8]*X[:,2]]
+    print('X.shape = ',X.shape)
+    print('X[:,0] = ',X[:,0])
+    S_fixed
+    S_fixed[0]*X[:,0]
+    S_fixed[1]*X[:,1]
+    flowfield2.S_fixed[2]*X[:,2]
+    (flowfield2.S_fixed[0]*X[:,0] + flowfield2.S_fixed[1]*X[:,1] + flowfield2.S_fixed[2]*X[:,2]).reshape([m,1])
+    U_ext = flowfield2.U_const_fixed.reshape([1,3]).repeat(m,axis=0) + np. concatenate(
+        ((flowfield2.S_fixed[0]*X[:,0] + flowfield2.S_fixed[1]*X[:,1] + flowfield2.S_fixed[2]*X[:,2]).reshape([m,1]),
+	 (flowfield2.S_fixed[3]*X[:,0] + flowfield2.S_fixed[4]*X[:,1] + flowfield2.S_fixed[5]*X[:,2]).reshape([m,1]),
+	 (flowfield2.S_fixed[6]*X[:,0] + flowfield2.S_fixed[7]*X[:,1] + flowfield2.S_fixed[8]*X[:,2]).reshape([m,1])),axis=1)
     return U_ext
-'''
+
+def flowfield3(X,**kwargs):
+    """ This function specifies the external flowfield at the points in
+        the m x 3 ndarray X. U_const_fixed and S_fixed are the external
+        linearized flow parameters, in fixed (global) coordinates. In
+        this function they are preserved as an attribute, initialized
+        to default values when the function is called for the first time.
+       Thereafter, they can be set with e..g. flowfield.S_fixed = ...
+    """
+    #global U_const_fixed S_fixed
+    print(kwargs)
+    try:
+        flowfield3.U_const_fixed = kwargs['U_const_fixed']
+        print('got here',flowfield3.U_const_fixed)
+    except:
+        print('oops1')
+        #pass
+    try:
+        flowfield3.S_fixed = kwargs['S_fixed']
+    except:
+        pass
+    print('here too')
+    U_const_fixed = flowfield3.U_const_fixed
+    print('here3')
+    S_fixed = flowfield3.S_fixed
+    m = X.shape[0]
+    print('X.shape = ',X.shape)
+    print('X[:,0] = ',X[:,0])
+    print(S_fixed,S_fixed.shape)
+    X0=X[:,0].reshape([m,1])
+    print(X0,X0.shape)
+    X1=X[:,1].reshape([m,1])
+    X2=X[:,2].reshape([m,1])
+    S_fixed[0]*X0
+    S_fixed[1]*X1
+    S_fixed[2]*X2
+    (S_fixed[0]*X0 + S_fixed[1]*X1 + S_fixed[2]*X2).reshape([m,1])
+    U_ext = U_const_fixed.reshape([1,3]).repeat(m,axis=0) + np. concatenate(
+        ((S_fixed[0]*X[:,0] + S_fixed[1]*X[:,1] + S_fixed[2]*X[:,2]).reshape([m,1]),
+	 (S_fixed[3]*X[:,0] + S_fixed[4]*X[:,1] + S_fixed[5]*X[:,2]).reshape([m,1]),
+	 (S_fixed[6]*X[:,0] + S_fixed[7]*X[:,1] + S_fixed[8]*X[:,2]).reshape([m,1])),axis=1)
+    return U_ext
+
 #==============================================================================
 def R_Euler(phi,theta,psi):
     """	This function returns the 3 x 3 rotation matrix for the Euler angles phi, theta and psi.
@@ -253,36 +304,48 @@ class VRSsim():
         with characteristics specified in a Morphology object from the 
         pyVRSmorph module. 
     """
-    def __init__(self,XEinit=np.asarray([0,0,0,0,0,0]),Tmax=3*25,dt_plot=0.25,
-                 dt = 0.001,morph=None,flowfield=Flowfield):
-        U_const_fixed = [0 0 0]
+    def __init__(self,XEinit=np.asarray([0,0,0,0,0,0]),
+                 U_const_fixed = np.asarray([0,0,0]),
+                 S_fixed = np.asarray([0,0,0,0,0,0,0,0,0]),
+                 Tmax=3*25,dt_plot=0.25,
+                 dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
+                 #dt = 0.001,morph=None,surface_layer=1,flowfield=Flowfield):
         self.tiny = 10**-7
         self.U_const_fixed = U_const_fixed
         self.S_fixed = S_fixed
         self.dt = dt
         self.dt_plot = dt_plot
-        self.XEinit = XEint
+        self.XEinit = XEinit
         self.Tmax = Tmax
         self.morph = morph
+        self.surface_layer = surface_layer
         self.flowfield = flowfield
 
-        self.F_buoyancy = M.pars.F_buoyancy
-        self.C_buoyancy = M.pars.C_buoyancy
-        self.F_gravity = M.pars.F_gravity
-        self.C_gravity = M.pars.C_gravity
+        self.F_buoyancy = self.morph.layers[self.surface_layer].pars.F_buoyancy
+        self.C_buoyancy = self.morph.layers[self.surface_layer].pars.C_buoyancy
+        self.F_gravity = self.morph.layers[self.surface_layer].pars.F_gravity
+        self.C_gravity = self.morph.layers[self.surface_layer].pars.C_gravity
+
+        # Set up graphics
+        self.fig = pyplot.figure()
+        self.axes1 = self.fig.add_subplot(1,2,1,projection='3d')
+        self.axes2 = self.fig.add_subplot(1,2,2,projection='3d')
+
+        self.morph.plot_layers(axes=self.axes2)
 
     def run(self):
         self.nsteps = ceil(self.Tmax/self.dt_plot)
         XE = self.XEinit
         for istep in range(self.nsteps):
-	    t_prev = istep*self.dt_plot
-	    t_next = min(istep*dt_plot,Tmax)
+            t_prev = istep*self.dt_plot
+            t_next = min(istep*self.dt_plot,self.Tmax)
             
-	    XE_old = XE
-            sol = odeint(self.Rotated_CoordsVRS,XE,[t_prev t_next])
+            XE_old = XE
+            sol = odeint(self.Rotated_CoordsVRS,XE,[t_prev,t_next])
             #[t,XEbig] = ode15s('Rotated_CoordsVRS',[t_prev t_next],XE);
-            XE = XEbig[-1,:]
+            XE = sol[-1,:]
             VEdot = self.Rotated_CoordsVRS(XE,t_next)
+            self.morph.plot_layers(axes=self.axes2)
     
     def Rotated_CoordsVRS(self,XE,t):
         """ This function calculates the translational velocity and time rate
@@ -305,16 +368,21 @@ class VRSsim():
         Z0 = XE[2]
         Xbase = np.asarray([X0,Y0,Z0]).reshape([1,3])
 
-        U_ext_fixed = self.flowfield(Xbase) #.reshape([3,1])	#	Velocity at the base in fixed coords
+        U_ext_fixed = self.flowfield(Xbase).reshape([3,1])	#	Velocity at the base in fixed coords
+        print('U_ext_fixed = ',U_ext_fixed)
+        print('R = ',R)
+        print('Rinv = ',Rinv)
         U_ext = R.dot(U_ext_fixed)				#	Velocity at the base in larval coords
-
+        print('U_ext = ',U_ext)
+        print('Xbase = ',Xbase)
         #	Increments from the position of the base for estimating derivatives
-        X0p = Xbase + Rinv.dot(np.asarray([self.tiny 0 0]).reshape([3,1]))
-        Y0p = Xbase + Rinv.dot(np.asarray([0 self.tiny 0]).reshape([3,1]))
-        Z0p = Xbase + Rinv.dot(np.asarray([0 0 self.tiny]).reshape([3,1]))
-        Up1_ext_fixed = self.flowfield(X0p.T)
-        Up2_ext_fixed = self.flowfield(Y0p.T)
-        Up3_ext_fixed = self.flowfield(Z0p.T)
+        X0p = Xbase + Rinv.dot(np.asarray([self.tiny,0,0]).reshape([3,1]))
+        Y0p = Xbase + Rinv.dot(np.asarray([0,self.tiny,0]).reshape([3,1]))
+        Z0p = Xbase + Rinv.dot(np.asarray([0,0,self.tiny]).reshape([3,1]))
+        print('X0p = ',X0p)
+        Up1_ext_fixed = self.flowfield(X0p.T).reshape([3,1])
+        Up2_ext_fixed = self.flowfield(Y0p.T).reshape([3,1])
+        Up3_ext_fixed = self.flowfield(Z0p.T).reshape([3,1])
         Up1_ext = R.dot(Up1_ext_fixed)
         Up2_ext = R.dot(Up2_ext_fixed)
         Up3_ext = R.dot(Up3_ext_fixed)
@@ -335,29 +403,32 @@ class VRSsim():
 
         FM_body = np.zeros([6,1]);
         FM_body[0:3] =  R.dot(self.F_buoyancy + self.F_gravity)
-        FM_body[3:6] = (cross(self.C_buoyancy,R * self.F_buoyancy) + cross(self.C_gravity,R * self.F_gravity));
+        FM_body[3:6] = (np.cross(self.C_buoyancy,R * self.F_buoyancy) + np.cross(self.C_gravity,R * self.F_gravity));
 
         #	Translational and rotational velocities in larva's coordinates (xyz)
-        vw = -self.K_VW \ (self.cil_speed * [self.F_total_cilia';self.M_total_cilia'] + self.K_C * U_ext + self.K_S * S + FM_body) 
+        vw = -np.linalg.solve(self.K_VW,self.cil_speed * np.concatenate(self.F_total_cilia.reshape([3,1]),
+                                                                        self.M_total_cilia.reshape([1,3]),
+                                                                        axis=0) + 
+                              self.K_C.dot(U_ext) + self.K_S.dot(S) + FM_body )
+        #vw = -self.K_VW \ (self.cil_speed * [self.F_total_cilia';self.M_total_cilia'] + self.K_C * U_ext + self.K_S * S + FM_body) 
         #	Translational and rotational velocities in fixed coordinates (XYZ)
-        VW = [Rinv * vw(1:3);Rinv * vw(4:6)] 
+        VW = np.concatenate(Rinv.dot(vw[0:3].reshape([1,3])),Rinv.dot(vw[3:6].reshape([1,3])),axis=0)
         #	Calculate rates of change in Euler angles corresponding to 
-        omega1 = vw(4)
-        omega2 = vw(5)
-        omega3 = vw(6)
+        omega1 = vw[3]
+        omega2 = vw[4]
+        omega3 = vw[5]
         # omega1 = VW(4)
         # omega2 = VW(5)
         # omega3 = VW(6)
 
-        phi = XE(4)
-        theta = XE(5)
-        psi = XE(6)
+        phi = XE[3]
+        theta = XE[4]
+        psi = XE[5]
 
         dphi_dt = cos(psi)/sin(theta) * omega2 + sin(psi)/sin(theta) * omega1
         dtheta_dt = cos(psi)*omega1 - sin(psi) * omega2
         dpsi_dt = -cos(theta)*cos(psi)/sin(theta) * omega2 - cos(theta)*sin(psi)/sin(theta) * omega1 + omega3
-
-
-        VEdot = [VW(1:3);[dphi_dt;dtheta_dt;dpsi_dt]]
+        
+        VEdot = np.concatenate((VW[0:3].reshape([3,1]),np.asarray([dphi_dt,dtheta_dt,dpsi_dt]).reshape([3,1])),axis=0)
 
         return VEdot

@@ -13,6 +13,8 @@ axes = figure.add_subplot(projection='3d')
 
 
 from pyVRSmorph import *
+from pyVRSflow import *
+
 
 M = Morphology()
 
@@ -31,19 +33,32 @@ M.flow_calcs(surface_layer=1)
 
 #================================================================
 
-from stl import mesh
-import numpy as np
-import math
-from pyVRSmorph import *
+#from stl import mesh
+#import numpy as np
+#import math
+#from pyVRSmorph import *
+#from pyVRSflow import *
 
-M = Morphology()
+
+#================================================================
+import pyVRSmorph as mrph
+import pyVRSflow as flw
+import numpy as np
+
+flw.flowfield3(np.zeros([1,3]),U_const_fixed=np.zeros(3),S_fixed=np.zeros(9))
+
+M = mrph.Morphology()
 estl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_ext.stl'
 istl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_int.stl'
-
 M.gen_surface(stlfile=estl)
 M.gen_inclusion(stlfile=istl,material='lipid',immersed_in=1)
 M.body_calcs()
 M.flow_calcs(surface_layer=1)
+
+sim = flw.VRSsim(morph=M)
+sim.run()
+
+flw.flowfield3(np.zeros([1,3]))
 
 #================================================================
 

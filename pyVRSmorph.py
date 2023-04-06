@@ -306,6 +306,7 @@ class Morphology():
                 colors = np.zeros([nfaces,3])
                 colors[:,0] = layer.rel_speed.flatten()
                 colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
+                scale = layer.mesh.points.flatten()
             elif layer.pars.material == 'lipid':
                 colors = np.asarray([0.,1.,1.])
             elif layer.pars.material == 'calcite':
@@ -319,7 +320,7 @@ class Morphology():
                                                                  facecolors=colors,
                                                                  alpha=alpha))
             if autoscale:
-                axes.autoscale_view()
+                axes.auto_scale_xyz(scale,scale,scale)
 
 
     def body_calcs(self):
