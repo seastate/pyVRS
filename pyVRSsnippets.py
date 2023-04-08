@@ -41,9 +41,11 @@ M.flow_calcs(surface_layer=1)
 
 
 #================================================================
+
 import pyVRSmorph as mrph
 import pyVRSflow as flw
 import numpy as np
+from math import pi
 
 flw.flowfield3(np.zeros([1,3]),U_const_fixed=np.zeros(3),S_fixed=np.zeros(9))
 
@@ -55,10 +57,10 @@ M.gen_inclusion(stlfile=istl,material='lipid',immersed_in=1)
 M.body_calcs()
 M.flow_calcs(surface_layer=1)
 
-sim = flw.VRSsim(morph=M)
+sim = flw.VRSsim(morph=M,XEinit=0*np.asarray([0.,0.,0.,pi/3,pi/3,pi/3]))
 sim.run()
 
-flw.flowfield3(np.zeros([1,3]))
+#flw.flowfield3(np.zeros([1,3]))
 
 #================================================================
 

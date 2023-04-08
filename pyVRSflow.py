@@ -9,7 +9,7 @@ from matplotlib import pyplot
 from matplotlib.colors import LightSource
 import numpy as np
 #import math
-from math import ceil, sin, cos
+from math import ceil, sin, cos, pi
 from scipy.integrate import odeint
 
 from attrdict import AttrDict
@@ -249,27 +249,27 @@ def flowfield3(X,**kwargs):
        Thereafter, they can be set with e..g. flowfield.S_fixed = ...
     """
     #global U_const_fixed S_fixed
-    print(kwargs)
+    #print(kwargs)
     try:
         flowfield3.U_const_fixed = kwargs['U_const_fixed']
-        print('got here',flowfield3.U_const_fixed)
-    except:
-        print('oops1')
-        #pass
-    try:
-        flowfield3.S_fixed = kwargs['S_fixed']
+        print('flowfield -- defined field U_const_fixed as ',flowfield3.U_const_fixed)
     except:
         pass
-    print('here too')
+    try:
+        flowfield3.S_fixed = kwargs['S_fixed']
+        print('flowfield -- defined field S_fixed as ',flowfield3.S_fixed)
+    except:
+        pass
+    #print('here too')
     U_const_fixed = flowfield3.U_const_fixed
-    print('here3')
+    #print('here3')
     S_fixed = flowfield3.S_fixed
     m = X.shape[0]
-    print('X.shape = ',X.shape)
-    print('X[:,0] = ',X[:,0])
-    print(S_fixed,S_fixed.shape)
+    #print('X.shape = ',X.shape)
+    #print('X[:,0] = ',X[:,0])
+    #print(S_fixed,S_fixed.shape)
     X0=X[:,0].reshape([m,1])
-    print(X0,X0.shape)
+    print('X0,X0.shape = ',X0,X0.shape)
     X1=X[:,1].reshape([m,1])
     X2=X[:,2].reshape([m,1])
     S_fixed[0]*X0
@@ -304,15 +304,17 @@ class VRSsim():
         with characteristics specified in a Morphology object from the 
         pyVRSmorph module. 
     """
-    def __init__(self,XEinit=np.asarray([0,0,0,0,0,0]),
+    def __init__(self,XEinit=np.asarray([0.,0.,0.,pi/3,pi/3,pi/3]),
                  U_const_fixed = np.asarray([0,0,0]),
                  S_fixed = np.asarray([0,0,0,0,0,0,0,0,0]),
+                 cil_speed = 0.,
                  Tmax=3*25,dt_plot=0.25,
                  dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
                  #dt = 0.001,morph=None,surface_layer=1,flowfield=Flowfield):
         self.tiny = 10**-7
         self.U_const_fixed = U_const_fixed
         self.S_fixed = S_fixed
+        self.cil_speed = cil_speed
         self.dt = dt
         self.dt_plot = dt_plot
         self.XEinit = XEinit
@@ -322,21 +324,31 @@ class VRSsim():
         self.flowfield = flowfield
 
         self.F_buoyancy = self.morph.layers[self.surface_layer].pars.F_buoyancy
+        self.F_buoyancy_vec = self.morph.layers[self.surface_layer].pars.F_buoyancy_vec
         self.C_buoyancy = self.morph.layers[self.surface_layer].pars.C_buoyancy
         self.F_gravity = self.morph.layers[self.surface_layer].pars.F_gravity
+        self.F_gravity_vec = self.morph.layers[self.surface_layer].pars.F_gravity_vec
         self.C_gravity = self.morph.layers[self.surface_layer].pars.C_gravity
+        
+        self.F_total_cilia = self.morph.layers[self.surface_layer].F_total_cilia
+        self.M_total_cilia = self.morph.layers[self.surface_layer].M_total_cilia
 
+        self.K_VW = self.morph.layers[self.surface_layer].K_VW
+        self.K_S = self.morph.layers[self.surface_layer].K_S
+        self.K_C = self.morph.layers[self.surface_layer].K_C
+        
         # Set up graphics
         self.fig = pyplot.figure()
         self.axes1 = self.fig.add_subplot(1,2,1,projection='3d')
         self.axes2 = self.fig.add_subplot(1,2,2,projection='3d')
-
-        self.morph.plot_layers(axes=self.axes2)
+        
+        self.morph.plot_layers(axes=self.axes2,XE=XEinit)
 
     def run(self):
         self.nsteps = ceil(self.Tmax/self.dt_plot)
         XE = self.XEinit
         for istep in range(self.nsteps):
+            print('istep = ',istep)
             t_prev = istep*self.dt_plot
             t_next = min(istep*self.dt_plot,self.Tmax)
             
@@ -345,7 +357,7 @@ class VRSsim():
             #[t,XEbig] = ode15s('Rotated_CoordsVRS',[t_prev t_next],XE);
             XE = sol[-1,:]
             VEdot = self.Rotated_CoordsVRS(XE,t_next)
-            self.morph.plot_layers(axes=self.axes2)
+            self.morph.plot_layers(axes=self.axes2,XE=XE)
     
     def Rotated_CoordsVRS(self,XE,t):
         """ This function calculates the translational velocity and time rate
@@ -366,20 +378,27 @@ class VRSsim():
         X0 = XE[0] 	#	The position of the base
         Y0 = XE[1] 
         Z0 = XE[2]
-        Xbase = np.asarray([X0,Y0,Z0]).reshape([1,3])
+        Xbase = np.asarray([X0,Y0,Z0]).reshape([3,1])
 
-        U_ext_fixed = self.flowfield(Xbase).reshape([3,1])	#	Velocity at the base in fixed coords
+        print('Xbase = ',Xbase)
+        U_ext_fixed = self.flowfield(Xbase.T).reshape([3,1])	#	Velocity at the base in fixed coords
         print('U_ext_fixed = ',U_ext_fixed)
         print('R = ',R)
         print('Rinv = ',Rinv)
         U_ext = R.dot(U_ext_fixed)				#	Velocity at the base in larval coords
         print('U_ext = ',U_ext)
         print('Xbase = ',Xbase)
+        #print('np.asarray([self.tiny,0,0]).reshape([3,1]) = ',
+        #      np.asarray([self.tiny,0,0]).reshape([3,1]))
         #	Increments from the position of the base for estimating derivatives
         X0p = Xbase + Rinv.dot(np.asarray([self.tiny,0,0]).reshape([3,1]))
         Y0p = Xbase + Rinv.dot(np.asarray([0,self.tiny,0]).reshape([3,1]))
         Z0p = Xbase + Rinv.dot(np.asarray([0,0,self.tiny]).reshape([3,1]))
+        print('Rinv.dot(Xbase) = ',Rinv.dot(Xbase))
         print('X0p = ',X0p)
+        print('Y0p = ',Y0p)
+        print('Z0p = ',Z0p)
+        print('self.flowfield(X0p.T) = ',self.flowfield(X0p.T))
         Up1_ext_fixed = self.flowfield(X0p.T).reshape([3,1])
         Up2_ext_fixed = self.flowfield(Y0p.T).reshape([3,1])
         Up3_ext_fixed = self.flowfield(Z0p.T).reshape([3,1])
@@ -402,12 +421,23 @@ class VRSsim():
         S[8] = (Up3_ext[2]-U_ext[2])/self.tiny
 
         FM_body = np.zeros([6,1]);
-        FM_body[0:3] =  R.dot(self.F_buoyancy + self.F_gravity)
-        FM_body[3:6] = (np.cross(self.C_buoyancy,R * self.F_buoyancy) + np.cross(self.C_gravity,R * self.F_gravity));
+        print('self.F_buoyancy = ',self.F_buoyancy_vec)
+        print('self.F_gravity = ',self.F_gravity_vec)
+        FM_body[0:3] = R.dot(self.F_buoyancy_vec + self.F_gravity_vec)
+        print('R.dot(self.F_buoyancy_vec) = ',R.dot(self.F_buoyancy_vec))
+        print('self.C_buoyancy.reshape([3,1]) = ',self.C_buoyancy.reshape([3,1]))
+        print(type(self.C_buoyancy.reshape([3,1])),self.C_buoyancy.reshape([3,1]).shape)
+        print(np.cross(self.C_buoyancy.reshape([1,3]),R.dot(self.F_buoyancy_vec).T))
+        FM_body[3:6] = (np.cross(self.C_buoyancy.reshape([1,3]),R.dot(self.F_buoyancy_vec).T) + \
+                       np.cross(self.C_gravity.reshape([1,3]),R.dot(self.F_gravity_vec).T)).T
 
         #	Translational and rotational velocities in larva's coordinates (xyz)
-        vw = -np.linalg.solve(self.K_VW,self.cil_speed * np.concatenate(self.F_total_cilia.reshape([3,1]),
-                                                                        self.M_total_cilia.reshape([1,3]),
+        print('F = ',self.F_total_cilia.reshape([3,1]))
+        print('M = ',self.M_total_cilia.reshape([3,1]))
+        np.concatenate((self.F_total_cilia.reshape([3,1]),self.M_total_cilia.reshape([3,1])),axis=0)
+        print('K_VW = \n',self.K_VW)
+        vw = -np.linalg.solve(self.K_VW,self.cil_speed * np.concatenate((self.F_total_cilia.reshape([3,1]),
+                                                                        self.M_total_cilia.reshape([3,1])),
                                                                         axis=0) + 
                               self.K_C.dot(U_ext) + self.K_S.dot(S) + FM_body )
         #vw = -self.K_VW \ (self.cil_speed * [self.F_total_cilia';self.M_total_cilia'] + self.K_C * U_ext + self.K_S * S + FM_body) 

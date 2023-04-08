@@ -12,7 +12,7 @@ import math
 
 from attrdict import AttrDict
 
-from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS
+from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
 
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
@@ -293,9 +293,11 @@ class Morphology():
         except:
             print('Failed to load file to generate a Inclusion object...')
 
-    def plot_layers(self,axes,alpha=0.5,autoscale=True):
+    def plot_layers(self,axes,alpha=0.5,autoscale=True,XE=None,f=0.5):
         """A method to simplify basic 3D visualizatioin of larval morphologies.
         """
+        xyz_min = np.asarray([None,None,None],dtype='float').reshape([3,1])
+        xyz_max = np.asarray([None,None,None],dtype='float').reshape([3,1])
         for i,layer in enumerate(self.layers):
             print('Layer {} of type {}'.format(i,type(layer)))
             # layer type "Medium" is invisible
@@ -306,7 +308,9 @@ class Morphology():
                 colors = np.zeros([nfaces,3])
                 colors[:,0] = layer.rel_speed.flatten()
                 colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
-                scale = layer.mesh.points.flatten()
+                #scale = layer.mesh.points.flatten()
+                #print('scale = ',scale)
+                #print('scale.shape = ',scale.shape)
             elif layer.pars.material == 'lipid':
                 colors = np.asarray([0.,1.,1.])
             elif layer.pars.material == 'calcite':
@@ -315,13 +319,35 @@ class Morphology():
                 colors = np.asarray([0.3,0.3,0.3])
             else:
                 print('Unknown layer material in plot_layers; skipping layer {}'.format(i))
-            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(layer.mesh.vectors,
+            vectors = layer.mesh.vectors
+            if XE is not None:
+                n = layer.mesh.vectors.shape[0]
+                R = R_Euler(XE[3],XE[4],XE[5])
+                Rinv = np.linalg.inv(R)
+                for m in range(n):
+                    #vectors[m] = R.dot(vectors[m])
+                    vectors[m] = Rinv.dot(vectors[m].T).T
+                    vectors[m] += np.repeat(XE[0:3].reshape([1,3]),3,axis=0)
+                    xyz_max = np.fmax(np.amax(vectors[m],axis=0).reshape([3,1]),xyz_max)
+                    xyz_min = np.fmin(np.amin(vectors[m],axis=0).reshape([3,1]),xyz_min)
+            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(vectors,
                                                                  shade=False,
                                                                  facecolors=colors,
                                                                  alpha=alpha))
-            if autoscale:
-                axes.auto_scale_xyz(scale,scale,scale)
-
+        if autoscale:
+            #axes.auto_scale_xyz(scale,scale,scale)
+            xyz_range = np.max(np.abs(xyz_max - xyz_min))
+            xyz_mid = (xyz_max + xyz_min)/2
+            print('xyz_min = ',xyz_min)
+            print('xyz_max = ',xyz_max)
+            print('xyz_range = ',xyz_range)
+            axes.set_xlim3d(xyz_mid[0]-f*xyz_range,xyz_mid[0]+f*xyz_range)
+            axes.set_ylim3d(xyz_mid[1]-f*xyz_range,xyz_mid[1]+f*xyz_range)
+            axes.set_zlim3d(xyz_mid[2]-f*xyz_range,xyz_mid[2]+f*xyz_range)
+            #axes.set_xlim3d(xyz_min[0]-f*xyz_range[0],xyz_max[0]+f*xyz_range[0])
+            #axes.set_ylim3d(xyz_min[1]-f*xyz_range[1],xyz_max[1]+f*xyz_range[1])
+            #axes.set_zlim3d(xyz_min[2]-f*xyz_range[2],xyz_max[2]+f*xyz_range[2])
+            axes.set_aspect('equal')
 
     def body_calcs(self):
         """A method to calculate body forces and moments (due to gravity and buoyancy)
@@ -367,6 +393,8 @@ class Morphology():
                     layer.pars.C_gravity = self.g*density_diff*layer.pars['volume'] * layer.pars['cog']
                 print('F_gravity = ',layer.pars.F_gravity)
                 print('C_gravity = ',layer.pars.C_gravity)
+                layer.pars.F_gravity_vec = np.asarray([0.,0.,layer.pars.F_gravity]).reshape([3,1])
+                layer.pars.F_buoyancy_vec = np.asarray([0.,0.,layer.pars.F_buoyancy]).reshape([3,1])
             elif layer.pars.layer_type == 'inclusion':
                 pass  # inclusions are accounted for in calculations for their enclosing surface
             else:
@@ -462,8 +490,8 @@ class Morphology():
                                                           cil_speed,U_const,S)
         F_cilia = F_cilia_indirect
         M_cilia = M_cilia_indirect
-        self.layers[surface_layer].F_total_cilia = np.sum(F_cilia,1)
-        self.layers[surface_layer].M_total_cilia = np.sum(M_cilia,1)
+        self.layers[surface_layer].F_total_cilia = np.sum(F_cilia,axis=0)
+        self.layers[surface_layer].M_total_cilia = np.sum(M_cilia,axis=0)
         #-------------------------------------------
         # Calculate the matrix K_CF, which is the matrix of forces resulting from 
         # external constant velocities.
