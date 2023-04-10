@@ -42,7 +42,8 @@ class Layer():
         hydrodynamic modeling. 
     """
     def __init__(self,stlfile=None,mesh=None,pars={},layer_type=None,
-                 material=None,density=None,immersed_in=None,**kwargs):
+                 material=None,density=None,immersed_in=None,
+                 check_normals=True,**kwargs):
         """ Create a layer instance, using an AttrDict object.
         """
         super().__init__(**kwargs)
@@ -61,6 +62,7 @@ class Layer():
         self.pars.layer_type = layer_type
         self.pars.transformations = []
         self.mesh = mesh
+        self.check_normals = check_normals
         # If provided, load the specified stl file
         self.pars.stlfile = stlfile
         if self.pars.stlfile is not None:
@@ -91,28 +93,83 @@ class Layer():
         if update:
             self.update()
 
-    def update(self,centroids=True,areas=True,units=True,normals=True,
-               unitnormals=True,minmax=True,mass_props=True):
-        """ A convenience method to initialize or update mesh properties
+    def update(self):#,centroids=True,areas=True,units=True,normals=True,
+               #unitnormals=True,minmax=True,mass_props=True):
+        """ A convenience method to initialize or update mesh properties.
+            The order is determined by the structure of numpy-stl.base.py,
+            in which centroids are calculated separately; areas use internally
+            generated normals (which are not saved); update_normals recalculates
+            (and saves) normals, areas and centroids; get_unit_normals 
+            uses previously determined normals and returns a scaled copy; 
+            update_units copies and scales previously determined normals and 
+            saves them as units.
         """
-        if units:
-            self.mesh.update_units()
-        if areas:
-            self.mesh.update_areas()
-            #self.areas = self.mesh.areas
-        if centroids:
-            self.mesh.update_centroids()
-        if normals and not areas: # areas updates normals automatically
-            self.mesh.update_normals()
-        if unitnormals: # areas updates normals automatically
-            self.unitnormals()
-        if minmax:
-            self.mesh.update_min()
-            self.mesh.update_max()
-        if mass_props:
-            self.pars.volume, self.pars.cog, self.pars.inertia = self.mesh.get_mass_properties()
+        # Calculate normals, areas and centroids. The normals resulting
+        # from this calculation are stored in mesh.normals, and may be
+        # either inwards or outwards pointing (leading to erroneous
+        # mass property calculations). Areas, centroids and min/max are
+        # not affected by this error.
+        self.mesh.update_normals()
+        self.mesh.update_min()
+        self.mesh.update_max()
+        # Get unormals, a set of normals scaled to unit length and
+        # corrected to all point outwards
+        self.unitnormals()
+        # The following gives erroneous values when vertex direction is
+        # not consistent, which is the case for many stls. It is based
+        # directly off of vertex coordinates, so correcting normals does
+        # not correct these calculations.
+        self.pars.volume, self.pars.cog, self.pars.inertia = self.mesh.get_mass_properties()
+        # Corrected calculations for mass properties
+        self.pars.total_area = self.mesh.areas.sum()
+        m = self.mesh.areas.shape[0]
+        volumes = self.mesh.areas*(self.mesh.centroids*self.unormals).sum(axis=1).reshape([m,1])/3
+        self.pars.total_volume = volumes.sum()
+        tet_centroids = 0.75 * self.mesh.centroids
+        self.pars.volume_center = (tet_centroids*volumes.repeat(3,axis=1)).sum(axis=0)/self.pars.total_volume
+        #return total_area,total_volume,volume_center,counts,S
+        
+        #if units:
+        #    self.mesh.update_units()
+        #if areas:
+        #    self.mesh.update_areas()
+        #    #self.areas = self.mesh.areas
+        #if centroids:
+        #    self.mesh.update_centroids()
+        #if normals and not areas: # areas updates normals automatically
+        #    self.mesh.update_normals()
+        #if unitnormals: # areas updates normals automatically
+        #    self.unitnormals()
+        #if minmax:
+        #    self.mesh.update_min()
+        #    self.mesh.update_max()
+        #if mass_props:
+        #    self.pars.volume, self.pars.cog, self.pars.inertia = self.mesh.get_mass_properties()
 
-  
+    def count_intersections(self,ref_point=None,project=0.01e-6):
+        #normals = self.mesh.get_unit_normals()
+        #centroids = mesh.centroids
+        print('Counting intersections...')
+        # If not provided, choose a ref_point guaranteed to be outside shape
+        if ref_point is None:
+            ref_point = self.mesh.max_ + np.ones(self.mesh.max_.shape)
+        test_points = self.mesh.centroids + project*self.unormals
+        m = self.unormals.shape[0]
+        counts = np.zeros([m,1])
+        for i in range(m):
+            q1=ref_point
+            q2 = test_points[i]
+            for j in range(m):
+                vecs = self.mesh.vectors[j,:,:]
+                p1 = vecs[0,:]
+                p2 = vecs[1,:]
+                p3 = vecs[2,:]
+                ilt = intersect_line_triangle(q1,q2,p1,p2,p3)
+                if ilt is not None:
+                    counts[i] += 1
+        print('...completed.')
+        return counts
+            
     def unitnormals(self,outwards=True,ref_point=None):
         """ A method to calculate unit normals for mesh faces using
             numpy-stl methods. If outwards is True, the normals are
@@ -129,15 +186,27 @@ class Layer():
             whether a point projected from each face along the unit normal
             is interior or exterior.
         """
-        self.unormals = self.mesh.get_unit_normals()
-        if outwards:
-            if ref_point is None:
-                #ref_point = self.mesh.max_ + 0.5*(self.mesh.max_-self.mesh.min_)
-                print('Using temporary algorithm to correct unit normal directions...\n')
-                ref_point = [0.,0.,0.] 
-            self.pars.ref_point = ref_point
-            s = np.sign(np.sum(self.mesh.centroids * self.unormals,axis=1))
+        self.unormals = self.mesh.get_unit_normals() # unit normals, possibly misdirected
+        # checking normals is time-consuming, so do it only when check_normals is True
+        # (only for Surface layers).
+        if self.check_normals:
+            counts = self.count_intersections()
+            evens = counts % 2==0
+            odds = counts % 2!=0
+            s = np.zeros(counts.shape)
+            s[odds] = -1
+            s[evens] = 1
+            # correct directions for inwards pointing normals
             self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
+        ## The original kludge, for centered ellisoids only...
+        #if outwards:
+        #    if ref_point is None:
+        #        #ref_point = self.mesh.max_ + 0.5*(self.mesh.max_-self.mesh.min_)
+        #        print('Using temporary algorithm to correct unit normal directions...\n')
+        #        ref_point = [0.,0.,0.] 
+        #    self.pars.ref_point = ref_point
+        #    s = np.sign(np.sum(self.mesh.centroids * self.unormals,axis=1))
+        #    self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
 
 class Surface(Layer):
     """ A derived class to contain an surface Layer, which additionally 
@@ -148,13 +217,10 @@ class Surface(Layer):
     """
     def __init__(self,stlfile=None,mesh=None,pars={},layer_type='surface',
                  density=1070.,material='tissue',immersed_in=0,
-                 get_points=True,
+                 get_points=True,check_normals=True,
                  tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,**kwargs)
-        #print(self.pars)
-        #self.pars.density = density
-        #self.pars.material = material
-        #self.pars.immersed_in = immersed_in
+        super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,
+                         check_normals,**kwargs)
         self.pars.tetra_project = tetra_project
         self.pars.tetra_project_min = tetra_project_min
         print('Created Surface object with parameters:\n{}'.format(self.pars))
@@ -194,8 +260,10 @@ class Inclusion(Layer):
         of gravity and buoyancy centers and forces.
     """
     def __init__(self,stlfile=None,mesh=None,pars={},layer_type='inclusion',
-                 density=1070.,material='seawater',immersed_in=None,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,**kwargs)
+                 density=1070.,material='seawater',immersed_in=None,
+                 check_normals=True,**kwargs):
+        super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,
+                         check_normals,**kwargs)
         #print(self.pars)
         print('Created Inclusion object with parameters:\n{}'.format(self.pars))
 
@@ -205,8 +273,10 @@ class Medium(Layer):
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
     def __init__(self,stlfile=None,mesh=None,pars={},layer_type='medium',
-                 density=1070.,material='seawater',nu = 1.17e-6,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,material,density,**kwargs)
+                 density=1070.,material='seawater',nu = 1.17e-6,
+                 check_normals=False,**kwargs):
+        super().__init__(stlfile,mesh,pars,layer_type,material,density,
+                         check_normals,**kwargs)
         #print(self.pars)
         #nu = 1.17e-6    #   Kinematic viscosity, meters^2/second
         mu = nu * density
@@ -369,13 +439,17 @@ class Morphology():
                 density_immersed_in = self.layers[immersed_in].pars['density']
                 #density_diff = density - density_immersed
                 # Buoyancy forces are due to displacement by the surface
-                layer.pars.F_buoyancy = self.g * density_immersed_in * layer.pars['volume']
-                layer.pars.C_buoyancy = layer.pars['cog']
+                #layer.pars.F_buoyancy = self.g * density_immersed_in * layer.pars['volume']
+                layer.pars.F_buoyancy = self.g * density_immersed_in * layer.pars['total_volume']
+                #layer.pars.C_buoyancy = layer.pars['cog']
+                layer.pars.C_buoyancy = layer.pars['volume_center']
                 print('F_buoyancy = ',layer.pars.F_buoyancy)
                 print('C_buoyancy = ',layer.pars.C_buoyancy)
                 # begin calculation of gravity forces; CoG's of included layers are weighted by mass
-                layer.pars.F_gravity = -self.g * density * layer.pars['volume']
-                layer.pars.C_gravity = self.g*density*layer.pars['volume'] * layer.pars['cog']
+                #layer.pars.F_gravity = -self.g * density * layer.pars['volume']
+                layer.pars.F_gravity = -self.g * density * layer.pars['total_volume']
+                #layer.pars.C_gravity = self.g*density*layer.pars['volume'] * layer.pars['cog']
+                layer.pars.C_gravity = self.g*density*layer.pars['total_volume'] * layer.pars['volume_center']
                 # Get a list of all inclusions
                 all_inclusions = []
                 new_inclusions = list(layer.pars.contains)
@@ -389,8 +463,10 @@ class Morphology():
                     density = self.layers[i].pars['density']
                     density_immersed_in = self.layers[immersed_in].pars['density']
                     density_diff = density - density_immersed_in
-                    layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['volume']
-                    layer.pars.C_gravity = self.g*density_diff*layer.pars['volume'] * layer.pars['cog']
+                    #layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['volume']
+                    #layer.pars.C_gravity = self.g*density_diff*layer.pars['volume'] * layer.pars['cog']
+                    layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['total_volume']
+                    layer.pars.C_gravity = self.g*density_diff*layer.pars['total_volume'] * layer.pars['volume_center']
                 print('F_gravity = ',layer.pars.F_gravity)
                 print('C_gravity = ',layer.pars.C_gravity)
                 layer.pars.F_gravity_vec = np.asarray([0.,0.,layer.pars.F_gravity]).reshape([3,1])
@@ -584,14 +660,14 @@ class Morphology():
         V_L = np.asarray([0,1,0])
         F_trans2,M_trans2 = solve_flowVRS(self.layers[surface_layer],
                                           V_L,Omega_L,cil_speed,U_const,S)
-        self.layers[surface_layer].F_total_trans2 = np.sum(F_trans1,axis=0,keepdims=True) 
-        self.layers[surface_layer].M_total_trans2 = np.sum(M_trans1,axis=0,keepdims=True) 
+        self.layers[surface_layer].F_total_trans2 = np.sum(F_trans2,axis=0,keepdims=True) 
+        self.layers[surface_layer].M_total_trans2 = np.sum(M_trans2,axis=0,keepdims=True) 
 #	Zero external flow; unit larval translation in the z direction; no rotation; zero ciliary action
         V_L = np.asarray([0,0,1])
         F_trans3,M_trans3 = solve_flowVRS(self.layers[surface_layer],
                                           V_L,Omega_L,cil_speed,U_const,S)
-        self.layers[surface_layer].F_total_trans3 = np.sum(F_trans1,axis=0,keepdims=True) 
-        self.layers[surface_layer].M_total_trans3 = np.sum(M_trans1,axis=0,keepdims=True) 
+        self.layers[surface_layer].F_total_trans3 = np.sum(F_trans3,axis=0,keepdims=True) 
+        self.layers[surface_layer].M_total_trans3 = np.sum(M_trans3,axis=0,keepdims=True) 
 #	Zero external flow; unit larval rotation in the x direction; no translation; zero ciliary action
         V_L = np.asarray([0,0,0])
         Omega_L = np.asarray([1,0,0])
@@ -609,8 +685,8 @@ class Morphology():
         Omega_L = np.asarray([0,0,1])
         F_rot3,M_rot3 = solve_flowVRS(self.layers[surface_layer],
                                       V_L,Omega_L,cil_speed,U_const,S)
-        self.layers[surface_layer].F_total_rot3 = np.sum(F_rot2,axis=0,keepdims=True)
-        self.layers[surface_layer].M_total_rot3 = np.sum(M_rot2,axis=0,keepdims=True)
+        self.layers[surface_layer].F_total_rot3 = np.sum(F_rot3,axis=0,keepdims=True)
+        self.layers[surface_layer].M_total_rot3 = np.sum(M_rot3,axis=0,keepdims=True)
 
         self.layers[surface_layer].K_FV = np.concatenate((self.layers[surface_layer].F_total_trans1.T,
                                                           self.layers[surface_layer].F_total_trans2.T,

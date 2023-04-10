@@ -57,12 +57,39 @@ M.gen_inclusion(stlfile=istl,material='lipid',immersed_in=1)
 M.body_calcs()
 M.flow_calcs(surface_layer=1)
 
-sim = flw.VRSsim(morph=M,XEinit=0*np.asarray([0.,0.,0.,pi/3,pi/3,pi/3]))
+sim = flw.VRSsim(morph=M,XEinit=np.asarray([10.,0.,0.,pi/3,pi/3,pi/3]))
 sim.run()
+
+
 
 #flw.flowfield3(np.zeros([1,3]))
 
 #================================================================
+
+import pyVRSmorph as mrph
+import pyVRSflow as flw
+import numpy as np
+from math import *
+
+S_fixed = 0.25*np.asarray([0,0,1,0,0,0,0,0,0])
+flw.flowfield3(np.zeros([1,3]),U_const_fixed=np.zeros(3),S_fixed=S_fixed)
+
+M = mrph.Morphology()
+estl = '/home/dg/VRS/pyFormex/plankter.stl'
+M.gen_surface(stlfile=estl)
+M.body_calcs()
+M.flow_calcs(surface_layer=1)
+
+sim = flw.VRSsim(morph=M,XEinit=np.asarray([0.,0.,0.,pi/3,-pi/4,pi]))
+sim.run()
+
+
+#================================================================
+
+
+
+
+
 
 
 def foo():
@@ -96,6 +123,19 @@ foo() #prints 2
 foo() #prints 3
 
 
+#================================================================
+
+
+def get_mass_props2(mesh=None):
+    normals = mesh.get_unit_normals()
+    areas = mesh.areas
+    total_area = areas.sum()
+    centroids = mesh.centroids
+    volumes = areas*(centroids*normals).sum(axis=1).reshape([areas.shape[0],1])/3
+    total_volume = volumes.sum()
+    tet_centroids = 0.75 * centroids
+    volume_center = (tet_centroids*volumes.repeat(3,axis=1)).sum(axis=0)/total_volume
+    return total_area,total_volume,volume_center
 
 
 

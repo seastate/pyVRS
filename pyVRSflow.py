@@ -5,16 +5,16 @@
 
 from stl import mesh
 from mpl_toolkits import mplot3d
-from matplotlib import pyplot
+from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 import numpy as np
 #import math
 from math import ceil, sin, cos, pi
-from scipy.integrate import odeint
+from scipy.integrate import odeint, solve_ivp
 
 from attrdict import AttrDict
 
-pyplot.ion()
+plt.ion()
 
 
 #==============================================================================
@@ -269,13 +269,9 @@ def flowfield3(X,**kwargs):
     #print('X[:,0] = ',X[:,0])
     #print(S_fixed,S_fixed.shape)
     X0=X[:,0].reshape([m,1])
-    print('X0,X0.shape = ',X0,X0.shape)
+    #print('X0,X0.shape = ',X0,X0.shape)
     X1=X[:,1].reshape([m,1])
     X2=X[:,2].reshape([m,1])
-    S_fixed[0]*X0
-    S_fixed[1]*X1
-    S_fixed[2]*X2
-    (S_fixed[0]*X0 + S_fixed[1]*X1 + S_fixed[2]*X2).reshape([m,1])
     U_ext = U_const_fixed.reshape([1,3]).repeat(m,axis=0) + np. concatenate(
         ((S_fixed[0]*X[:,0] + S_fixed[1]*X[:,1] + S_fixed[2]*X[:,2]).reshape([m,1]),
 	 (S_fixed[3]*X[:,0] + S_fixed[4]*X[:,1] + S_fixed[5]*X[:,2]).reshape([m,1]),
@@ -338,12 +334,13 @@ class VRSsim():
         self.K_C = self.morph.layers[self.surface_layer].K_C
         
         # Set up graphics
-        self.fig = pyplot.figure()
+        self.fig = plt.figure()
         self.axes1 = self.fig.add_subplot(1,2,1,projection='3d')
         self.axes2 = self.fig.add_subplot(1,2,2,projection='3d')
         
         self.morph.plot_layers(axes=self.axes2,XE=XEinit)
-
+        plt.pause(1e-3)
+        
     def run(self):
         self.nsteps = ceil(self.Tmax/self.dt_plot)
         XE = self.XEinit
@@ -353,13 +350,20 @@ class VRSsim():
             t_next = min(istep*self.dt_plot,self.Tmax)
             
             XE_old = XE
-            sol = odeint(self.Rotated_CoordsVRS,XE,[t_prev,t_next])
+            sol = solve_ivp(self.Rotated_CoordsVRS,[t_prev,t_next],XE, method='RK45',max_step=1e-3)
+            #sol = odeint(self.Rotated_CoordsVRS,XE,[t_prev,t_next])
             #[t,XEbig] = ode15s('Rotated_CoordsVRS',[t_prev t_next],XE);
-            XE = sol[-1,:]
+            #XE = sol[-1,:]
+            print('sol = ')
+            print(sol)
+            XE = sol.y[-1,:]
             VEdot = self.Rotated_CoordsVRS(XE,t_next)
+            self.axes2.cla()
             self.morph.plot_layers(axes=self.axes2,XE=XE)
+            plt.pause(1e-3)
     
-    def Rotated_CoordsVRS(self,XE,t):
+    #def Rotated_CoordsVRS(self,XE,t):
+    def Rotated_CoordsVRS(self,t,XE):
         """ This function calculates the translational velocity and time rate
             of change of Euler angles for a larva immersed in flow.
             The rotation matrix and its inverse are R and Rinv. Capital 
@@ -371,7 +375,7 @@ class VRSsim():
         #global U_const_fixed	#	Constant component of external velocity, fixed coordinates
         #global S_fixed	#	Constant component of external velocity, fixed coordinates
         #global U_const S
-
+        print('t, XE = ',t,XE)
         R = R_Euler(XE[3],XE[4],XE[5])			#	The rotation of the larva relative to XYZ
         Rinv = np.linalg.inv(R)	#	The rotation of XYZ relative to the larva
 
@@ -442,7 +446,9 @@ class VRSsim():
                               self.K_C.dot(U_ext) + self.K_S.dot(S) + FM_body )
         #vw = -self.K_VW \ (self.cil_speed * [self.F_total_cilia';self.M_total_cilia'] + self.K_C * U_ext + self.K_S * S + FM_body) 
         #	Translational and rotational velocities in fixed coordinates (XYZ)
-        VW = np.concatenate(Rinv.dot(vw[0:3].reshape([1,3])),Rinv.dot(vw[3:6].reshape([1,3])),axis=0)
+        #VW = np.concatenate(Rinv.dot(vw[0:3].reshape([1,3])),Rinv.dot(vw[3:6].reshape([1,3])),axis=0)
+        VW = np.concatenate((Rinv.dot(vw[0:3].reshape([3,1])),Rinv.dot(vw[3:6].reshape([3,1]))),axis=0)
+        print('VW = ',VW,VW.shape)
         #	Calculate rates of change in Euler angles corresponding to 
         omega1 = vw[3]
         omega2 = vw[4]
@@ -460,5 +466,7 @@ class VRSsim():
         dpsi_dt = -cos(theta)*cos(psi)/sin(theta) * omega2 - cos(theta)*sin(psi)/sin(theta) * omega1 + omega3
         
         VEdot = np.concatenate((VW[0:3].reshape([3,1]),np.asarray([dphi_dt,dtheta_dt,dpsi_dt]).reshape([3,1])),axis=0)
+
+        print('VEdot = ',VEdot)
 
         return VEdot
