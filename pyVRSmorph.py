@@ -159,8 +159,24 @@ class Layer():
         for i in range(m):
             q1=ref_point
             q2 = test_points[i]
+            q12 = np.asarray([q1,q2])
+            q12min = q12.min(axis=0)
+            q12max = q12.max(axis=0)
+            #qmax_0 = max(q1[0],q2[0])
+            #qmin_0 = min(q1[0],q2[0])
+            #qmax_1 = max(q1[1],q2[1])
+            #qmin_1 = min(q1[1],q2[1])
+            #qmax_2 = max(q1[2],q2[2])
+            #qmin_2 = min(q1[2],q2[2])
+            #qmin = np.asarray([min(q1[0],q2[0]),min(q1[1],q2[1]),min(q1[2],q2[2])])
             for j in range(m):
                 vecs = self.mesh.vectors[j,:,:]
+                vecs_min = vecs.min(axis=0)
+                if (q12max < vecs_min).any():
+                    continue
+                vecs_max = vecs.max(axis=0)
+                if (q12min > vecs_max).any():
+                    continue
                 p1 = vecs[0,:]
                 p2 = vecs[1,:]
                 p3 = vecs[2,:]
