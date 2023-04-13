@@ -5,7 +5,7 @@ from mpl_toolkits import mplot3d
 from matplotlib import pyplot
 from matplotlib.colors import LightSource
 import numpy as np
-import math
+from math import *
 
 pyplot.ion()
 figure = pyplot.figure()
@@ -71,8 +71,9 @@ import pyVRSflow as flw
 import numpy as np
 from math import *
 
-S_fixed = 0.25*np.asarray([0,0,1,0,0,0,0,0,0])
-flw.flowfield3(np.zeros([1,3]),U_const_fixed=np.zeros(3),S_fixed=S_fixed)
+S_fixed = 1.*np.asarray([0.,0.,1.,0.,0.,0.,0.,0.,0.])
+U_const_fixed = 0.*np.asarray([1.,0.,0.])
+flw.flowfield3(np.zeros([1,3]),U_const_fixed=U_const_fixed,S_fixed=S_fixed)
 
 M = mrph.Morphology()
 estl = '/home/dg/VRS/pyFormex/plankter.stl'
@@ -80,16 +81,43 @@ M.gen_surface(stlfile=estl)
 M.body_calcs()
 M.flow_calcs(surface_layer=1)
 
-sim = flw.VRSsim(morph=M,XEinit=np.asarray([0.,0.,0.,pi/3,-pi/4,pi]))
+sim = flw.VRSsim(morph=M,XEinit=0.001*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=10.)
 sim.run()
 
+sim.Rotated_CoordsVRS(0.,sim.XEinit)
 
 #================================================================
 
 
+import pyVRSmorph as mrph
+import pyVRSflow as flw
+import numpy as np
+from math import *
+from matplotlib import pyplot as plt
+
+plt.ion()
+figure = plt.figure()
+axes = figure.add_subplot(projection='3d')
+
+M = mrph.Morphology()
+estl = '/home/dg/VRS/pyFormex/plankter.stl'
+M.gen_surface(stlfile=estl)
+
+M.plot_layers(axes=axes,XE=np.asarray([0.,0.,0.,0.,0.,0.]))
+
+M.layers[1].mesh.max_
+M.layers[1].mesh.update_max()
+
+#================================================================
+
+import pyVRSmorph as mrph
+estl = '/home/dg/VRS/pyFormex/plankter.stl'
+L = mrph.Layer(stlfile=estl)
+
+scount = 174711, icount = 35053
 
 
-
+sim.fig.subplots_adjust(bottom=0.15)
 
 
 def foo():

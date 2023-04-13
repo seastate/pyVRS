@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 import numpy as np
 #import math
-from math import ceil, sin, cos, pi
+from math import ceil, sin, cos, pi, sqrt
 from scipy.integrate import odeint, solve_ivp
 
 from attrdict import AttrDict
@@ -301,13 +301,13 @@ class VRSsim():
         pyVRSmorph module. 
     """
     def __init__(self,XEinit=np.asarray([0.,0.,0.,pi/3,pi/3,pi/3]),
-                 U_const_fixed = np.asarray([0,0,0]),
-                 S_fixed = np.asarray([0,0,0,0,0,0,0,0,0]),
+                 U_const_fixed = np.asarray([0.,0.,0.]),
+                 S_fixed = np.asarray([0.,0.,0.,0.,0.,0.,0.,0.,0.]),
                  cil_speed = 0.,
-                 Tmax=3*25,dt_plot=0.25,
+                 Tmax=1,dt_plot=0.25,
                  dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
                  #dt = 0.001,morph=None,surface_layer=1,flowfield=Flowfield):
-        self.tiny = 10**-7
+        self.tiny = 10**-6
         self.U_const_fixed = U_const_fixed
         self.S_fixed = S_fixed
         self.cil_speed = cil_speed
@@ -343,23 +343,66 @@ class VRSsim():
         
     def run(self):
         self.nsteps = ceil(self.Tmax/self.dt_plot)
-        XE = self.XEinit
+        XE = self.XEinit.reshape([6,])
+        self.axes1.scatter(XE[0],XE[1],XE[2],c='red')
+        #self.axes1.set_aspect('equal')
         for istep in range(self.nsteps):
             print('istep = ',istep)
             t_prev = istep*self.dt_plot
-            t_next = min(istep*self.dt_plot,self.Tmax)
-            
+            t_next = min((istep+1)*self.dt_plot,self.Tmax)
             XE_old = XE
-            sol = solve_ivp(self.Rotated_CoordsVRS,[t_prev,t_next],XE, method='RK45',max_step=1e-3)
+            print('[t_prev,t_next],XE = ',[t_prev,t_next],XE)
+            sol = solve_ivp(self.Rotated_CoordsVRS,[t_prev,t_next],XE,method='RK45',
+                            first_step=1e-4,max_step=1e-3)
             #sol = odeint(self.Rotated_CoordsVRS,XE,[t_prev,t_next])
             #[t,XEbig] = ode15s('Rotated_CoordsVRS',[t_prev t_next],XE);
             #XE = sol[-1,:]
+            print('dir(sol) = ',dir(sol))
             print('sol = ')
             print(sol)
-            XE = sol.y[-1,:]
-            VEdot = self.Rotated_CoordsVRS(XE,t_next)
+            print('sol.y = ',sol.y)
+            print('sol.t = ',sol.t)
+            XE = sol.y[:,-1]
+            VEdot = self.Rotated_CoordsVRS(t_next,XE)
+            title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,XE[0:3],VEdot[0:3])
+            self.axes1.set_title(title_str1)
+            self.axes1.plot([XE_old[0],XE[0]],[XE_old[1],XE[1]],[XE_old[2],XE[2]],c='blue')
+            #self.axes1.set_aspect('equal')
+            #self.axes1.margins(1.5)
+            self.axes1.set_xlabel('$X$ position')
+            self.axes1.set_ylabel('$Y$ position')
+            self.axes1.set_zlabel('$Z$ position')
+            tx = self.axes1.xaxis.get_offset_text().get_text()
+            if tx=='':
+                tx = '1'
+            ty = self.axes1.yaxis.get_offset_text().get_text()
+            if ty=='':
+                ty = '1'
+            tz = self.axes1.zaxis.get_offset_text().get_text()
+            if tz=='':
+                tz = '1'
+            scale_txt = 'scale =  {},   {},   {}'.format(tx,ty,tz)
+            print('axes1: scale_txt = ',scale_txt)
+            try:
+                self.axes1.texts[0].remove()
+            except:
+                pass
+            self.axes1.text2D(0.05, 0.95, scale_txt, transform=self.axes1.transAxes)
+           #self.axes1.xaxis.offset_text_position='top'
+            #self.axes1.yaxis.offset_text_position='top'
+            #self.axes1.zaxis.offset_text_position='top'
+            #self.axes1.set_box_aspect((np.ptp(xs), np.ptp(ys), np.ptp(zs)))  # aspect ratio is 1:1:1 in data space
+            #self.axes1.set_box_aspect([ub - lb for lb, ub in (getattr(self.axes1, f'get_{a}lim')() for a in 'xyz')])
+            #aspect = self.axes1.get_box_aspect()
+            #max_aspect = aspect.max()
+            #aspect[aspect<max_aspect/3]=max_aspect/3
+            #self.axes1.set_box_aspect(aspect)
+            
             self.axes2.cla()
             self.morph.plot_layers(axes=self.axes2,XE=XE)
+            speed = sqrt((VEdot[0:3]**2).sum())
+            title_str2 = '{}\n{}'.format(XE[3:6],speed)
+            self.axes2.set_title(title_str2)
             plt.pause(1e-3)
     
     #def Rotated_CoordsVRS(self,XE,t):
@@ -395,9 +438,9 @@ class VRSsim():
         #print('np.asarray([self.tiny,0,0]).reshape([3,1]) = ',
         #      np.asarray([self.tiny,0,0]).reshape([3,1]))
         #	Increments from the position of the base for estimating derivatives
-        X0p = Xbase + Rinv.dot(np.asarray([self.tiny,0,0]).reshape([3,1]))
-        Y0p = Xbase + Rinv.dot(np.asarray([0,self.tiny,0]).reshape([3,1]))
-        Z0p = Xbase + Rinv.dot(np.asarray([0,0,self.tiny]).reshape([3,1]))
+        X0p = Xbase + Rinv.dot(np.asarray([self.tiny,0.,0.]).reshape([3,1]))
+        Y0p = Xbase + Rinv.dot(np.asarray([0.,self.tiny,0.]).reshape([3,1]))
+        Z0p = Xbase + Rinv.dot(np.asarray([0.,0.,self.tiny]).reshape([3,1]))
         print('Rinv.dot(Xbase) = ',Rinv.dot(Xbase))
         print('X0p = ',X0p)
         print('Y0p = ',Y0p)
@@ -434,7 +477,7 @@ class VRSsim():
         print(np.cross(self.C_buoyancy.reshape([1,3]),R.dot(self.F_buoyancy_vec).T))
         FM_body[3:6] = (np.cross(self.C_buoyancy.reshape([1,3]),R.dot(self.F_buoyancy_vec).T) + \
                        np.cross(self.C_gravity.reshape([1,3]),R.dot(self.F_gravity_vec).T)).T
-
+        print('FM_body = ',FM_body)
         #	Translational and rotational velocities in larva's coordinates (xyz)
         print('F = ',self.F_total_cilia.reshape([3,1]))
         print('M = ',self.M_total_cilia.reshape([3,1]))
@@ -444,6 +487,7 @@ class VRSsim():
                                                                         self.M_total_cilia.reshape([3,1])),
                                                                         axis=0) + 
                               self.K_C.dot(U_ext) + self.K_S.dot(S) + FM_body )
+        print('vw = ',vw)
         #vw = -self.K_VW \ (self.cil_speed * [self.F_total_cilia';self.M_total_cilia'] + self.K_C * U_ext + self.K_S * S + FM_body) 
         #	Translational and rotational velocities in fixed coordinates (XYZ)
         #VW = np.concatenate(Rinv.dot(vw[0:3].reshape([1,3])),Rinv.dot(vw[3:6].reshape([1,3])),axis=0)
@@ -453,6 +497,7 @@ class VRSsim():
         omega1 = vw[3]
         omega2 = vw[4]
         omega3 = vw[5]
+        print('omega = ',vw[3:6])
         # omega1 = VW(4)
         # omega2 = VW(5)
         # omega3 = VW(6)
@@ -469,4 +514,5 @@ class VRSsim():
 
         print('VEdot = ',VEdot)
 
-        return VEdot
+        #return VEdot
+        return VEdot.reshape([6,])
