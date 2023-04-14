@@ -80,8 +80,8 @@ def External_vel3(X,U_const,S):
     """
     nx = X.shape[0]
     # Insure shape and dtype are consistent
-    u_const = U_const.astype('float').reshape([1,3])
-    s = S.astype('float').flatten()
+    u_const = U_const.copy().astype('float').reshape([1,3])
+    s = S.copy().astype('float').flatten()
     #print(X.shape)
     #print(S[0:3])
     #print(S[0:3].dot(X.T).shape)
@@ -129,6 +129,8 @@ def solve_flowVRS(surface,V_L,Omega_L,cil_speed,U_const,S):
     #U = [U_1 ; U_2 ; U_3]
     #  U is the set of velocities at the control points    
     U = (V_larva - U_ext + cil_speed*surface.rel_Ucilia).T.reshape([3*nc,1])
+    #print((V_larva - U_ext + cil_speed*surface.rel_Ucilia)[0:4,:])
+    #print('U = ',U[0:4,0])
     #  F is the set of forces ON THE FLUID necessary to induces those velocities.
     F = surface.Q_inv.dot(U)
     #F = surface.Q_inv * U
@@ -152,94 +154,6 @@ def solve_flowVRS(surface,V_L,Omega_L,cil_speed,U_const,S):
     return Fpt,Mpt
 
 #==============================================================================
-def foo():
-    """A test function to experiment with function attributes as static vairables
-    """
-    try:
-        foo.counter += 1
-    except AttributeError:
-        foo.counter = 1
-
-class Foo(object):
-    # Class variable, shared by all instances of this class
-    counter = 0
-    blah = 'blah'
-    
-    def __call__(self):
-        Foo.counter += 1
-        print(Foo.counter)
-
-class Foo2():
-    def __init__(self):
-        self.counter = 0
-        self.blah = 'blah'
-    
-    def __call__(self):
-        self.counter += 1
-        print(self.counter)
-
-class Foo3():
-    def __init__(self):
-        self.counter = 0
-        self.blah = 'blah'
-    
-    def __call__(self,X):
-        self.counter += 1
-        print(self.counter,X)
-
-#==============================================================================
-class Flowfield():
-    """ This function specifies the external flowfield at the points in
-        the m x 3 ndarray X. U_const_fixed and S_fixed are the external
-        linearized flow parameters, in fixed (global) coordinates. In
-        this function they are preserved as an attribute, initialized
-        to default values when the function is called for the first time.
-       Thereafter, they can be set with e..g. flowfield.S_fixed = ...
-    """
-    def __init__(self,U_const_fixed = np.zeros([1,3]),
-                             S_fixed = np.zeros([1,9])):
-        self.U_const_fixed = U_const_fixed
-        self.S_fixed = S_fixed
-        
-    def __call__(self,X):
-        m = X.shape[0]
-        U_ext = U_const_fixed.reshape([1,3]).repeat(m,axis=0) \
-	    + [S_fixed[0]*X[:,0] + S_fixed[1]*X[:,1] + S_fixed[2]*X[:,2],
-	       S_fixed[3]*X[:,0] + S_fixed[4]*X[:,1] + S_fixed[5]*X[:,2],
-	       S_fixed[6]*X[:,0] + S_fixed[7]*X[:,1] + S_fixed[8]*X[:,2]]
-        return U_ext
-
-#==============================================================================
-
-def flowfield2(X):
-    """ This function specifies the external flowfield at the points in
-        the m x 3 ndarray X. U_const_fixed and S_fixed are the external
-        linearized flow parameters, in fixed (global) coordinates. In
-        this function they are preserved as an attribute, initialized
-        to default values when the function is called for the first time.
-       Thereafter, they can be set with e..g. flowfield.S_fixed = ...
-    """
-    #global U_const_fixed S_fixed
-    try:
-        U_const_fixed = flowfield2.U_const_fixed
-        S_fixed = flowfield2.S_fixed
-    except:
-        flowfield2.U_const_fixed = np.zeros([1,3])
-        flowfield2.S_fixed = np.zeros([1,9])
-    m = X.shape[0]
-    print('X.shape = ',X.shape)
-    print('X[:,0] = ',X[:,0])
-    S_fixed
-    S_fixed[0]*X[:,0]
-    S_fixed[1]*X[:,1]
-    flowfield2.S_fixed[2]*X[:,2]
-    (flowfield2.S_fixed[0]*X[:,0] + flowfield2.S_fixed[1]*X[:,1] + flowfield2.S_fixed[2]*X[:,2]).reshape([m,1])
-    U_ext = flowfield2.U_const_fixed.reshape([1,3]).repeat(m,axis=0) + np. concatenate(
-        ((flowfield2.S_fixed[0]*X[:,0] + flowfield2.S_fixed[1]*X[:,1] + flowfield2.S_fixed[2]*X[:,2]).reshape([m,1]),
-	 (flowfield2.S_fixed[3]*X[:,0] + flowfield2.S_fixed[4]*X[:,1] + flowfield2.S_fixed[5]*X[:,2]).reshape([m,1]),
-	 (flowfield2.S_fixed[6]*X[:,0] + flowfield2.S_fixed[7]*X[:,1] + flowfield2.S_fixed[8]*X[:,2]).reshape([m,1])),axis=1)
-    return U_ext
-
 def flowfield3(X,**kwargs):
     """ This function specifies the external flowfield at the points in
         the m x 3 ndarray X. U_const_fixed and S_fixed are the external
@@ -264,14 +178,17 @@ def flowfield3(X,**kwargs):
     U_const_fixed = flowfield3.U_const_fixed
     #print('here3')
     S_fixed = flowfield3.S_fixed
+    # Return without a result if called without X (e.g. to install S, U parameters)
+    if X is None:
+        return
     m = X.shape[0]
     #print('X.shape = ',X.shape)
     #print('X[:,0] = ',X[:,0])
     #print(S_fixed,S_fixed.shape)
-    X0=X[:,0].reshape([m,1])
+    #X0=X[:,0].reshape([m,1])
     #print('X0,X0.shape = ',X0,X0.shape)
-    X1=X[:,1].reshape([m,1])
-    X2=X[:,2].reshape([m,1])
+    #X1=X[:,1].reshape([m,1])
+    #X2=X[:,2].reshape([m,1])
     U_ext = U_const_fixed.reshape([1,3]).repeat(m,axis=0) + np. concatenate(
         ((S_fixed[0]*X[:,0] + S_fixed[1]*X[:,1] + S_fixed[2]*X[:,2]).reshape([m,1]),
 	 (S_fixed[3]*X[:,0] + S_fixed[4]*X[:,1] + S_fixed[5]*X[:,2]).reshape([m,1]),
@@ -300,24 +217,15 @@ class VRSsim():
         with characteristics specified in a Morphology object from the 
         pyVRSmorph module. 
     """
-    def __init__(self,XEinit=np.asarray([0.,0.,0.,pi/3,pi/3,pi/3]),
-                 U_const_fixed = np.asarray([0.,0.,0.]),
-                 S_fixed = np.asarray([0.,0.,0.,0.,0.,0.,0.,0.,0.]),
-                 cil_speed = 0.,
-                 Tmax=1,dt_plot=0.25,
-                 dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
-                 #dt = 0.001,morph=None,surface_layer=1,flowfield=Flowfield):
-        self.tiny = 10**-6
-        self.U_const_fixed = U_const_fixed
-        self.S_fixed = S_fixed
-        self.cil_speed = cil_speed
-        self.dt = dt
-        self.dt_plot = dt_plot
-        self.XEinit = XEinit
-        self.Tmax = Tmax
+    #def __init__(self,XEinit=np.asarray([0.,0.,0.,pi/3,pi/3,pi/3]),
+    #             U_const_fixed = np.asarray([0.,0.,0.]),
+    #             S_fixed = np.asarray([0.,0.,0.,0.,0.,0.,0.,0.,0.]),
+    #             cil_speed = 0.,
+    #             Tmax=1,dt_plot=0.25,
+    #             dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
+    def __init__(self,morph=None,surface_layer=1):
         self.morph = morph
         self.surface_layer = surface_layer
-        self.flowfield = flowfield
 
         self.F_buoyancy = self.morph.layers[self.surface_layer].pars.F_buoyancy
         self.F_buoyancy_vec = self.morph.layers[self.surface_layer].pars.F_buoyancy_vec
@@ -338,35 +246,55 @@ class VRSsim():
         self.axes1 = self.fig.add_subplot(1,2,1,projection='3d')
         self.axes2 = self.fig.add_subplot(1,2,2,projection='3d')
         
-        self.morph.plot_layers(axes=self.axes2,XE=XEinit)
+        #self.morph.plot_layers(axes=self.axes2,XE=XEinit)
         plt.pause(1e-3)
         
-    def run(self):
+    def run(self,XEinit=None,resume=False,
+                 U_const_fixed = np.asarray([0.,0.,0.]),
+                 S_fixed = np.asarray([0.,0.,0.,0.,0.,0.,0.,0.,0.]),
+                 cil_speed = 0.,
+                 Tmax=1,dt_plot=0.25,
+                 dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
+        self.tiny = 10**-6
+        self.U_const_fixed = U_const_fixed.copy()
+        self.S_fixed = S_fixed.copy()
+        # Call flowfield, to set flow parameters S, U
+        self.flowfield = flowfield
+        self.flowfield(None,U_const_fixed=self.U_const_fixed,S_fixed=self.S_fixed)
+        self.cil_speed = cil_speed
+        self.dt = dt
+        self.dt_plot = dt_plot
+        if XEinit is not None:
+            self.XE = XEinit.reshape([6,])
+        self.Tmax = Tmax
         self.nsteps = ceil(self.Tmax/self.dt_plot)
-        XE = self.XEinit.reshape([6,])
-        self.axes1.scatter(XE[0],XE[1],XE[2],c='red')
+        #XE = self.XEinit.reshape([6,])
+        self.axes1.scatter(self.XE[0],self.XE[1],self.XE[2],c='red')
         #self.axes1.set_aspect('equal')
+        if not resume:
+            self.t_prev = -self.dt_plot
         for istep in range(self.nsteps):
-            print('istep = ',istep)
-            t_prev = istep*self.dt_plot
-            t_next = min((istep+1)*self.dt_plot,self.Tmax)
-            XE_old = XE
-            print('[t_prev,t_next],XE = ',[t_prev,t_next],XE)
-            sol = solve_ivp(self.Rotated_CoordsVRS,[t_prev,t_next],XE,method='RK45',
-                            first_step=1e-4,max_step=1e-3)
+            #print('istep = ',istep)
+            #t_prev = istep*self.dt_plot
+            self.t_prev += self.dt_plot
+            t_next = min(self.t_prev+self.dt_plot,self.Tmax)
+            XE_old = self.XE
+            #print('[t_prev,t_next],XE = ',[t_prev,t_next],XE)
+            sol = solve_ivp(self.Rotated_CoordsVRS,[self.t_prev,t_next],self.XE,method='RK45',
+                            first_step=1e-4,max_step=1e-2)
             #sol = odeint(self.Rotated_CoordsVRS,XE,[t_prev,t_next])
             #[t,XEbig] = ode15s('Rotated_CoordsVRS',[t_prev t_next],XE);
             #XE = sol[-1,:]
-            print('dir(sol) = ',dir(sol))
-            print('sol = ')
-            print(sol)
-            print('sol.y = ',sol.y)
-            print('sol.t = ',sol.t)
-            XE = sol.y[:,-1]
-            VEdot = self.Rotated_CoordsVRS(t_next,XE)
-            title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,XE[0:3],VEdot[0:3])
+            #print('dir(sol) = ',dir(sol))
+            #print('sol = ')
+            #print(sol)
+            #print('sol.y = ',sol.y)
+            #print('sol.t = ',sol.t)
+            self.XE = sol.y[:,-1]
+            self.VEdot = self.Rotated_CoordsVRS(t_next,self.XE)
+            title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,self.XE[0:3],self.VEdot[0:3])
             self.axes1.set_title(title_str1)
-            self.axes1.plot([XE_old[0],XE[0]],[XE_old[1],XE[1]],[XE_old[2],XE[2]],c='blue')
+            self.axes1.plot([XE_old[0],self.XE[0]],[XE_old[1],self.XE[1]],[XE_old[2],self.XE[2]],c='blue')
             #self.axes1.set_aspect('equal')
             #self.axes1.margins(1.5)
             self.axes1.set_xlabel('$X$ position')
@@ -382,7 +310,7 @@ class VRSsim():
             if tz=='':
                 tz = '1'
             scale_txt = 'scale =  {},   {},   {}'.format(tx,ty,tz)
-            print('axes1: scale_txt = ',scale_txt)
+            #print('axes1: scale_txt = ',scale_txt)
             try:
                 self.axes1.texts[0].remove()
             except:
@@ -399,9 +327,9 @@ class VRSsim():
             #self.axes1.set_box_aspect(aspect)
             
             self.axes2.cla()
-            self.morph.plot_layers(axes=self.axes2,XE=XE)
-            speed = sqrt((VEdot[0:3]**2).sum())
-            title_str2 = '{}\n{}'.format(XE[3:6],speed)
+            self.morph.plot_layers(axes=self.axes2,XE=self.XE)
+            speed = sqrt((self.VEdot[0:3]**2).sum())
+            title_str2 = '{}\n{}'.format(self.XE[3:6],speed)
             self.axes2.set_title(title_str2)
             plt.pause(1e-3)
     
@@ -418,7 +346,7 @@ class VRSsim():
         #global U_const_fixed	#	Constant component of external velocity, fixed coordinates
         #global S_fixed	#	Constant component of external velocity, fixed coordinates
         #global U_const S
-        print('t, XE = ',t,XE)
+        #print('t, XE = ',t,XE)
         R = R_Euler(XE[3],XE[4],XE[5])			#	The rotation of the larva relative to XYZ
         Rinv = np.linalg.inv(R)	#	The rotation of XYZ relative to the larva
 
@@ -427,25 +355,25 @@ class VRSsim():
         Z0 = XE[2]
         Xbase = np.asarray([X0,Y0,Z0]).reshape([3,1])
 
-        print('Xbase = ',Xbase)
+        #print('Xbase = ',Xbase)
         U_ext_fixed = self.flowfield(Xbase.T).reshape([3,1])	#	Velocity at the base in fixed coords
-        print('U_ext_fixed = ',U_ext_fixed)
-        print('R = ',R)
-        print('Rinv = ',Rinv)
+        #print('U_ext_fixed = ',U_ext_fixed)
+        #print('R = ',R)
+        #print('Rinv = ',Rinv)
         U_ext = R.dot(U_ext_fixed)				#	Velocity at the base in larval coords
-        print('U_ext = ',U_ext)
-        print('Xbase = ',Xbase)
+        #print('U_ext = ',U_ext)
+        #print('Xbase = ',Xbase)
         #print('np.asarray([self.tiny,0,0]).reshape([3,1]) = ',
         #      np.asarray([self.tiny,0,0]).reshape([3,1]))
         #	Increments from the position of the base for estimating derivatives
         X0p = Xbase + Rinv.dot(np.asarray([self.tiny,0.,0.]).reshape([3,1]))
         Y0p = Xbase + Rinv.dot(np.asarray([0.,self.tiny,0.]).reshape([3,1]))
         Z0p = Xbase + Rinv.dot(np.asarray([0.,0.,self.tiny]).reshape([3,1]))
-        print('Rinv.dot(Xbase) = ',Rinv.dot(Xbase))
-        print('X0p = ',X0p)
-        print('Y0p = ',Y0p)
-        print('Z0p = ',Z0p)
-        print('self.flowfield(X0p.T) = ',self.flowfield(X0p.T))
+        #print('Rinv.dot(Xbase) = ',Rinv.dot(Xbase))
+        #print('X0p = ',X0p)
+        #print('Y0p = ',Y0p)
+        #print('Z0p = ',Z0p)
+        #print('self.flowfield(X0p.T) = ',self.flowfield(X0p.T))
         Up1_ext_fixed = self.flowfield(X0p.T).reshape([3,1])
         Up2_ext_fixed = self.flowfield(Y0p.T).reshape([3,1])
         Up3_ext_fixed = self.flowfield(Z0p.T).reshape([3,1])
@@ -468,36 +396,36 @@ class VRSsim():
         S[8] = (Up3_ext[2]-U_ext[2])/self.tiny
 
         FM_body = np.zeros([6,1]);
-        print('self.F_buoyancy = ',self.F_buoyancy_vec)
-        print('self.F_gravity = ',self.F_gravity_vec)
+        #print('self.F_buoyancy = ',self.F_buoyancy_vec)
+        #print('self.F_gravity = ',self.F_gravity_vec)
         FM_body[0:3] = R.dot(self.F_buoyancy_vec + self.F_gravity_vec)
-        print('R.dot(self.F_buoyancy_vec) = ',R.dot(self.F_buoyancy_vec))
-        print('self.C_buoyancy.reshape([3,1]) = ',self.C_buoyancy.reshape([3,1]))
-        print(type(self.C_buoyancy.reshape([3,1])),self.C_buoyancy.reshape([3,1]).shape)
-        print(np.cross(self.C_buoyancy.reshape([1,3]),R.dot(self.F_buoyancy_vec).T))
+        #print('R.dot(self.F_buoyancy_vec) = ',R.dot(self.F_buoyancy_vec))
+        #print('self.C_buoyancy.reshape([3,1]) = ',self.C_buoyancy.reshape([3,1]))
+        #print(type(self.C_buoyancy.reshape([3,1])),self.C_buoyancy.reshape([3,1]).shape)
+        #print(np.cross(self.C_buoyancy.reshape([1,3]),R.dot(self.F_buoyancy_vec).T))
         FM_body[3:6] = (np.cross(self.C_buoyancy.reshape([1,3]),R.dot(self.F_buoyancy_vec).T) + \
                        np.cross(self.C_gravity.reshape([1,3]),R.dot(self.F_gravity_vec).T)).T
-        print('FM_body = ',FM_body)
+        #print('FM_body = ',FM_body)
         #	Translational and rotational velocities in larva's coordinates (xyz)
-        print('F = ',self.F_total_cilia.reshape([3,1]))
-        print('M = ',self.M_total_cilia.reshape([3,1]))
-        np.concatenate((self.F_total_cilia.reshape([3,1]),self.M_total_cilia.reshape([3,1])),axis=0)
-        print('K_VW = \n',self.K_VW)
-        vw = -np.linalg.solve(self.K_VW,self.cil_speed * np.concatenate((self.F_total_cilia.reshape([3,1]),
+        #print('F = ',self.F_total_cilia.reshape([3,1]))
+        #print('M = ',self.M_total_cilia.reshape([3,1]))
+        #np.concatenate((self.F_total_cilia.reshape([3,1]),self.M_total_cilia.reshape([3,1])),axis=0)
+        #print('K_VW = \n',self.K_VW)
+        self.vw = -np.linalg.solve(self.K_VW,self.cil_speed * np.concatenate((self.F_total_cilia.reshape([3,1]),
                                                                         self.M_total_cilia.reshape([3,1])),
                                                                         axis=0) + 
                               self.K_C.dot(U_ext) + self.K_S.dot(S) + FM_body )
-        print('vw = ',vw)
+        #print('vw = ',vw)
         #vw = -self.K_VW \ (self.cil_speed * [self.F_total_cilia';self.M_total_cilia'] + self.K_C * U_ext + self.K_S * S + FM_body) 
         #	Translational and rotational velocities in fixed coordinates (XYZ)
         #VW = np.concatenate(Rinv.dot(vw[0:3].reshape([1,3])),Rinv.dot(vw[3:6].reshape([1,3])),axis=0)
-        VW = np.concatenate((Rinv.dot(vw[0:3].reshape([3,1])),Rinv.dot(vw[3:6].reshape([3,1]))),axis=0)
-        print('VW = ',VW,VW.shape)
+        self.VW = np.concatenate((Rinv.dot(self.vw[0:3].reshape([3,1])),Rinv.dot(self.vw[3:6].reshape([3,1]))),axis=0)
+        #print('VW = ',VW,VW.shape)
         #	Calculate rates of change in Euler angles corresponding to 
-        omega1 = vw[3]
-        omega2 = vw[4]
-        omega3 = vw[5]
-        print('omega = ',vw[3:6])
+        omega1 = self.vw[3]
+        omega2 = self.vw[4]
+        omega3 = self.vw[5]
+        #print('omega = ',vw[3:6])
         # omega1 = VW(4)
         # omega2 = VW(5)
         # omega3 = VW(6)
@@ -510,9 +438,9 @@ class VRSsim():
         dtheta_dt = cos(psi)*omega1 - sin(psi) * omega2
         dpsi_dt = -cos(theta)*cos(psi)/sin(theta) * omega2 - cos(theta)*sin(psi)/sin(theta) * omega1 + omega3
         
-        VEdot = np.concatenate((VW[0:3].reshape([3,1]),np.asarray([dphi_dt,dtheta_dt,dpsi_dt]).reshape([3,1])),axis=0)
+        VEdot = np.concatenate((self.VW[0:3].reshape([3,1]),np.asarray([dphi_dt,dtheta_dt,dpsi_dt]).reshape([3,1])),axis=0)
 
-        print('VEdot = ',VEdot)
+        #print('VEdot = ',VEdot)
 
         #return VEdot
         return VEdot.reshape([6,])

@@ -47,7 +47,8 @@ import pyVRSflow as flw
 import numpy as np
 from math import pi
 
-flw.flowfield3(np.zeros([1,3]),U_const_fixed=np.zeros(3),S_fixed=np.zeros(9))
+S_fixed = -10.*np.asarray([0.,0.,1.,0.,0.,0.,0.,0.,0.])
+U_const_fixed = 0.*np.asarray([1.,0.,0.])
 
 M = mrph.Morphology()
 estl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_ext.stl'
@@ -57,13 +58,34 @@ M.gen_inclusion(stlfile=istl,material='lipid',immersed_in=1)
 M.body_calcs()
 M.flow_calcs(surface_layer=1)
 
-sim = flw.VRSsim(morph=M,XEinit=np.asarray([10.,0.,0.,pi/3,pi/3,pi/3]))
-sim.run()
+sim = flw.VRSsim(morph=M)
+sim.run(XEinit=0.001*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=100.,cil_speed=0.5e-6,U_const_fixed=U_const_fixed,S_fixed=S_fixed)
 
 
 
 #flw.flowfield3(np.zeros([1,3]))
 
+#================================================================
+
+import pyVRSmorph as mrph
+import pyVRSflow as flw
+import numpy as np
+from math import *
+
+S_fixed = 0.*np.asarray([0.,0.,1.,0.,0.,0.,0.,0.,0.])
+U_const_fixed = 0.*np.asarray([1.,0.,0.])
+
+M = mrph.Morphology()
+estl = '/home/dg/VRS/pyFormex/plankter.stl'
+M.gen_surface(stlfile=estl)
+M.body_calcs()
+M.flow_calcs(surface_layer=1)
+
+sim = flw.VRSsim(morph=M)
+sim.run(XEinit=0.001*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=10.,cil_speed=0.e-6,U_const_fixed=U_const_fixed,S_fixed=S_fixed)
+
+
+sim.run(XEinit=1.*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=10.,cil_speed=-0.5e-6,U_const_fixed=U_const_fixed,S_fixed=S_fixed)
 #================================================================
 
 import pyVRSmorph as mrph
@@ -81,7 +103,7 @@ M.gen_surface(stlfile=estl)
 M.body_calcs()
 M.flow_calcs(surface_layer=1)
 
-sim = flw.VRSsim(morph=M,XEinit=0.001*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=10.)
+sim = flw.VRSsim(morph=M,XEinit=0.001*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=100.,cil_speed=0.5e-6)
 sim.run()
 
 sim.Rotated_CoordsVRS(0.,sim.XEinit)

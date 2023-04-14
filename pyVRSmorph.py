@@ -345,10 +345,10 @@ class Morphology():
  
         """
         super().__init__(**kwargs)
-        base_densities={'seawater':1030,
-                   'tissue':1070,
-                   'lipid':900,
-                   'calcite':2669}
+        base_densities={'seawater':1030.,
+                    'tissue':1070.,
+                    'lipid':900.,
+                    'calcite':2669.}
         # Update with passed parameters
         self.densities=AttrDict(base_densities)
         self.densities.update(densities)
@@ -419,7 +419,7 @@ class Morphology():
         xyz_min = np.asarray([None,None,None],dtype='float').reshape([3,1])
         xyz_max = np.asarray([None,None,None],dtype='float').reshape([3,1])
         for i,layer in enumerate(self.layers):
-            print('Layer {} of type {}'.format(i,type(layer)))
+            #print('Layer {} of type {}'.format(i,type(layer)))
             # layer type "Medium" is invisible
             if isinstance(layer,Medium):
                 continue
@@ -473,10 +473,10 @@ class Morphology():
             #axes.auto_scale_xyz(scale,scale,scale)
             xyz_range = np.max(np.abs(xyz_max - xyz_min))
             xyz_mid = (xyz_max + xyz_min)/2
-            print('xyz_min = ',xyz_min)
-            print('xyz_max = ',xyz_max)
-            print('xyz_mid = ',xyz_mid)
-            print('xyz_range = ',xyz_range)
+            #print('xyz_min = ',xyz_min)
+            #print('xyz_max = ',xyz_max)
+            #print('xyz_mid = ',xyz_mid)
+            #print('xyz_range = ',xyz_range)
             axes.set_xlim3d(xyz_mid[0]-f*xyz_range,xyz_mid[0]+f*xyz_range)
             axes.set_ylim3d(xyz_mid[1]-f*xyz_range,xyz_mid[1]+f*xyz_range)
             axes.set_zlim3d(xyz_mid[2]-f*xyz_range,xyz_mid[2]+f*xyz_range)
@@ -499,7 +499,7 @@ class Morphology():
         if tz=='':
             tz = '1'
         scale_txt = 'scale =  {},  {},  {}'.format(tx,ty,tz)
-        print('axes2: scale_txt = ',scale_txt)
+        #print('axes2: scale_txt = ',scale_txt)
         try:
             axes.texts[0].remove()
         except:
@@ -557,6 +557,7 @@ class Morphology():
                     #layer.pars.C_gravity = self.g*density_diff*layer.pars['volume'] * layer.pars['cog']
                     layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['total_volume']
                     layer.pars.C_gravity = self.g*density_diff*layer.pars['total_volume'] * layer.pars['volume_center']
+                layer.pars.C_gravity /= -layer.pars.F_gravity
                 print('F_gravity = ',layer.pars.F_gravity)
                 print('C_gravity = ',layer.pars.C_gravity)
                 layer.pars.F_gravity_vec = np.asarray([0.,0.,layer.pars.F_gravity]).reshape([3,1])
@@ -650,7 +651,7 @@ class Morphology():
         V_L = np.asarray([0.,0.,0.])
         Omega_L = np.asarray([0.,0.,0.])
         #V_larva = larval_V(P_center,V_L,Omega_L)
-        cil_speed = 1
+        cil_speed = 1.
         F_cilia_indirect,M_cilia_indirect = solve_flowVRS(self.layers[surface_layer],
                                                           V_L,Omega_L,
                                                           cil_speed,U_const,S)
@@ -664,7 +665,7 @@ class Morphology():
         V_L = np.asarray([0.,0.,0.])
         Omega_L = np.asarray([0.,0.,0.])
         #V_larva = larval_V(P_center,V_L,Omega_L)
-        cil_speed = 0
+        cil_speed = 0.
         S = np.zeros(9)   # Vector of shear velocities
       
         U_const = np.asarray([1.,0.,0.])
@@ -708,7 +709,7 @@ class Morphology():
         U_const = np.zeros([1,3])
         V_L = np.asarray([0.,0.,0.])
         Omega_L = np.asarray([0.,0.,0.])
-        cil_speed = 0
+        cil_speed = 0.
         self.layers[surface_layer].K_FS = np.zeros([3,9])	
         self.layers[surface_layer].K_MS = np.zeros([3,9])	
 
@@ -739,7 +740,7 @@ class Morphology():
         #  Zero external flow; unit larval translation in the x direction; no rotation; zero ciliary action
         U_const = np.zeros([1,3])
         Omega_L = np.asarray([0.,0.,0.])
-        cil_speed = 0
+        cil_speed = 0.
         S = np.zeros([9,1])      # Vector of shear velocities
 
         V_L = np.asarray([1.,0.,0.])
