@@ -556,7 +556,8 @@ class Morphology():
                     #layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['volume']
                     #layer.pars.C_gravity = self.g*density_diff*layer.pars['volume'] * layer.pars['cog']
                     layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['total_volume']
-                    layer.pars.C_gravity = self.g*density_diff*layer.pars['total_volume'] * layer.pars['volume_center']
+                    layer.pars.C_gravity += self.g*density_diff*self.layers[i].pars['total_volume'] * \
+                                                                self.layers[i].pars['volume_center']
                 layer.pars.C_gravity /= -layer.pars.F_gravity
                 print('F_gravity = ',layer.pars.F_gravity)
                 print('C_gravity = ',layer.pars.C_gravity)
