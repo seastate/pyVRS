@@ -55,6 +55,7 @@ class SemiEllipsoid():
             self.Ss[i] = 2. * pi * self.rs[i]/8.
             self.ns[i] = ceil(self.Ss[i]/self.ds)
 
+        self.peak = np.asarray([0.,0.,self.b])
 
     def tile_quadrant(self,clear=True,trange=None):
         if clear:
@@ -64,7 +65,7 @@ class SemiEllipsoid():
         #for i in range(1,self.nlevel-7):
         if trange is None:
             w0 = 0
-            w1 = self.nlevel
+            w1 = self.nlevel-1
         else:
             w0 = trange[0]
             w1 = trange[1]
@@ -72,19 +73,33 @@ class SemiEllipsoid():
             print('i = ',i)
     
             s0 = (np.ones(self.ns[i]).cumsum() - (self.ns[i]+1.)/2.) * self.Ss[i]/(self.ns[i]-1.)
-            s1 = (np.ones(self.ns[i+1]).cumsum() - (self.ns[i+1]+1.)/2.) * self.Ss[i+1]/(self.ns[i+1]-1.)
             z0 = self.zs[i] * np.ones(s0.shape)
+            self.row0 = np.zeros([self.ns[i],3])
+            self.row0[:,0] = self.rs[i] * np.cos(s0/(self.rs[i]))
+            self.row0[:,1] = self.rs[i] * np.sin(s0/(self.rs[i]))
+            self.row0[:,2] = z0
+            
+
+            if self.ns[i+1] == 1:
+                # reached the last row that can be propagated;
+                # create a final tile to peak to close the shape.
+                if self.ns[i] != 2:
+                    print('Warning: Abrupt tile transition at peak! Errors are likely!!')
+                tri1 = np.zeros([1,3,3])
+                tri1[0,0,:] = self.row0[0]
+                tri1[0,1,:] = self.peak
+                tri1[0,2,:] = self.row0[1]
+                self.vectors = np.append(self.vectors,tri1,axis=0)
+                print('Added peak tile...')
+                break
+                 
+            s1 = (np.ones(self.ns[i+1]).cumsum() - (self.ns[i+1]+1.)/2.) * self.Ss[i+1]/(self.ns[i+1]-1.)
             z1 = self.zs[i+1] * np.ones(s1.shape)
+            self.row1 = np.zeros([self.ns[i+1],3])
+            self.row1[:,0] = self.rs[i+1] * np.cos(s1/(self.rs[i+1]))
+            self.row1[:,1] = self.rs[i+1] * np.sin(s1/(self.rs[i+1]))
+            self.row1[:,2] = z1
     
-            row0 = np.zeros([self.ns[i],3])
-            row1 = np.zeros([self.ns[i+1],3])
-    
-            row0[:,0] = self.rs[i] * np.cos(s0/(self.rs[i]))
-            row0[:,1] = self.rs[i] * np.sin(s0/(self.rs[i]))
-            row0[:,2] = z0
-            row1[:,0] = self.rs[i+1] * np.cos(s1/(self.rs[i+1]))
-            row1[:,1] = self.rs[i+1] * np.sin(s1/(self.rs[i+1]))
-            row1[:,2] = z1
 
             if self.ns[i] == self.ns[i+1] or self.ns[i] == self.ns[i+1]+1:
                 offset = 1
@@ -98,9 +113,9 @@ class SemiEllipsoid():
                     if ii + offset <0:
                         continue
                     tri1 = np.zeros([1,3,3])
-                    tri1[0,0,:] = row0[ii]
-                    tri1[0,1,:] = row1[ii]
-                    tri1[0,2,:] = row0[ii+offset]
+                    tri1[0,0,:] = self.row0[ii]
+                    tri1[0,1,:] = self.row1[ii]
+                    tri1[0,2,:] = self.row0[ii+offset]
                     self.vectors = np.append(self.vectors,tri1,axis=0)
                 except:
                     pass
@@ -110,11 +125,11 @@ class SemiEllipsoid():
                     if ii + offset <0:
                         continue
                     tri1 = np.zeros([1,3,3])
-                    tri1[0,0,:] = row1[ii]
-                    tri1[0,1,:] = row1[ii+offset]
-                    tri1[0,2,:] = row0[ii+offset]
+                    tri1[0,0,:] = self.row1[ii]
+                    tri1[0,1,:] = self.row1[ii+offset]
+                    tri1[0,2,:] = self.row0[ii+offset]
                     self.vectors = np.append(self.vectors,tri1,axis=0)
-                    print('B success: ',i)
+                    #print('B success: ',i)
                 except:
                     pass
 
