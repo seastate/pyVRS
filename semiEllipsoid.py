@@ -71,12 +71,14 @@ class SemiEllipsoid():
             w1 = trange[1]
         for i in range(w0,w1):
             print('i = ',i)
-    
+
+            angle_offset = pi/8.
+            #s0 = np.ones(self.ns[i]).cumsum() * self.Ss[i]/(self.ns[i]-1.)
             s0 = (np.ones(self.ns[i]).cumsum() - (self.ns[i]+1.)/2.) * self.Ss[i]/(self.ns[i]-1.)
             z0 = self.zs[i] * np.ones(s0.shape)
             self.row0 = np.zeros([self.ns[i],3])
-            self.row0[:,0] = self.rs[i] * np.cos(s0/(self.rs[i]))
-            self.row0[:,1] = self.rs[i] * np.sin(s0/(self.rs[i]))
+            self.row0[:,0] = self.rs[i] * np.cos(angle_offset+s0/(self.rs[i]))
+            self.row0[:,1] = self.rs[i] * np.sin(angle_offset+s0/(self.rs[i]))
             self.row0[:,2] = z0
             
 
@@ -93,11 +95,12 @@ class SemiEllipsoid():
                 print('Added peak tile...')
                 break
                  
+            #s1 = np.ones(self.ns[i+1]).cumsum() * self.Ss[i+1]/(self.ns[i+1]-1.)
             s1 = (np.ones(self.ns[i+1]).cumsum() - (self.ns[i+1]+1.)/2.) * self.Ss[i+1]/(self.ns[i+1]-1.)
             z1 = self.zs[i+1] * np.ones(s1.shape)
             self.row1 = np.zeros([self.ns[i+1],3])
-            self.row1[:,0] = self.rs[i+1] * np.cos(s1/(self.rs[i+1]))
-            self.row1[:,1] = self.rs[i+1] * np.sin(s1/(self.rs[i+1]))
+            self.row1[:,0] = self.rs[i+1] * np.cos(angle_offset+s1/(self.rs[i+1]))
+            self.row1[:,1] = self.rs[i+1] * np.sin(angle_offset+s1/(self.rs[i+1]))
             self.row1[:,2] = z1
     
 
@@ -132,6 +135,32 @@ class SemiEllipsoid():
                     #print('B success: ',i)
                 except:
                     pass
+
+    def mirror_tiles(self,concat=True,directions=[]):
+        for d in directions:
+            self.vectors2 = self.vectors.copy()
+            if d in ['x','X']:
+                for i,v in enumerate(self.vectors2):
+                    self.vectors2[i,:,0] *= -1
+                if concat:
+                    self.vectors = np.append(self.vectors,self.vectors2,axis=0)
+            if d in ['y','Y']:
+                for i,v in enumerate(self.vectors2):
+                    self.vectors2[i,:,1] *= -1
+                if concat:
+                    self.vectors = np.append(self.vectors,self.vectors2,axis=0)
+            if d in ['z','Z']:
+                for i,v in enumerate(self.vectors2):
+                    self.vectors2[i,:,2] *= -1
+                if concat:
+                    self.vectors = np.append(self.vectors,self.vectors2,axis=0)
+
+    def reflect_tiles(self,concat=True):
+        self.vectors2 = self.vectors.copy()
+        for i,v in enumerate(self.vectors2):
+            self.vectors2[i,:,0:2] = np.flip(self.vectors2[i,:,0:2],axis=1)
+        if concat:
+            self.vectors = np.append(self.vectors,self.vectors2,axis=0)
 
     def plot_tiles(self,cla=True,axes=None):
         if axes is None:
