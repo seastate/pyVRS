@@ -58,7 +58,6 @@ class Layer():
         # Update with passed parameters
         self.pars=AttrDict(base_pars)
         self.pars.update(pars)
-        #print(self.pars)
         self.pars.layer_type = layer_type
         self.pars.transformations = []
         self.mesh = mesh
@@ -100,8 +99,7 @@ class Layer():
         if update:
             self.update()
 
-    def update(self,nornals=True):#,centroids=True,areas=True,units=True,normals=True,
-               #unitnormals=True,minmax=True,mass_props=True):
+    def update(self):
         """ A convenience method to initialize or update mesh properties.
             The order is determined by the structure of numpy-stl.base.py,
             in which centroids are calculated separately; areas use internally
@@ -134,39 +132,17 @@ class Layer():
         self.pars.total_volume = self.volumes.sum()
         tet_centroids = 0.75 * self.centroids
         self.pars.volume_center = (tet_centroids*self.volumes.repeat(3,axis=1)).sum(axis=0)/self.pars.total_volume
-        #return total_area,total_volume,volume_center,counts,S
-        
-        #if units:
-        #    self.mesh.update_units()
-        #if areas:
-        #    self.mesh.update_areas()
-        #    #self.areas = self.mesh.areas
-        #if centroids:
-        #    self.mesh.update_centroids()
-        #if normals and not areas: # areas updates normals automatically
-        #    self.mesh.update_normals()
-        #if unitnormals: # areas updates normals automatically
-        #    self.unitnormals()
-        #if minmax:
-        #    self.mesh.update_min()
-        #    self.mesh.update_max()
-        #if mass_props:
-        #    self.pars.volume, self.pars.cog, self.pars.inertia = self.mesh.get_mass_properties()
 
     def count_intersections(self,ref_point=None,project=0.01e-6):
-        #normals = self.mesh.get_unit_normals()
-        #centroids = mesh.centroids
         print('Counting intersections...')
         # If not provided, choose a ref_point guaranteed to be outside shape
         if ref_point is None:
             ref_point = self.mesh.max_ + np.ones(self.mesh.max_.shape)
             #ref_point2 = self.mesh.min_ - np.ones(self.mesh.max_.shape)
         test_points = self.centroids + project*self.unormals
-        #test_points = self.mesh.centroids + project*self.unormals
         m = self.unormals.shape[0]
         counts = np.zeros([m,1])
         q1=ref_point
-        #q3=ref_point2
         scount = 0
         icount = 0
         for i in range(m):
@@ -174,9 +150,6 @@ class Layer():
             q12 = np.asarray([q1,q2])
             q12min = q12.min(axis=0)
             q12max = q12.max(axis=0)
-            #q13 = np.asarray([q1,q3])
-            #q13min = q13.min(axis=0)
-            #q13max = q13.max(axis=0)
             for j in range(m):
                 # Do a simple check, to save calls to
                 # intersect_line_triangle, which is slow
@@ -189,13 +162,6 @@ class Layer():
                 if (q12min > vecs_max).any():
                     scount += 1
                     continue
-                #if (q13max < vecs_min).any():
-                #    scount += 1
-                #    continue
-                #vecs_max = vecs.max(axis=0)
-                #if (q13min > vecs_max).any():
-                #    scount += 1
-                #    continue
                 p1 = vecs[0,:]
                 p2 = vecs[1,:]
                 p3 = vecs[2,:]
@@ -247,15 +213,6 @@ class Layer():
             s[evens] = 1
             # correct directions for inwards pointing normals
             self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
-        ## The original kludge, for centered ellisoids only...
-        #if outwards:
-        #    if ref_point is None:
-        #        #ref_point = self.mesh.max_ + 0.5*(self.mesh.max_-self.mesh.min_)
-        #        print('Using temporary algorithm to correct unit normal directions...\n')
-        #        ref_point = [0.,0.,0.] 
-        #    self.pars.ref_point = ref_point
-        #    s = np.sign(np.sum(self.mesh.centroids * self.unormals,axis=1))
-        #    self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
 
 class Surface(Layer):
     """ A derived class to contain an surface Layer, which additionally 
@@ -287,16 +244,12 @@ class Surface(Layer):
         if tetra_project_min is not None:
             self.pars.tetra_project_min = tetra_project_min
         self.ctrlpts = self.centroids
-        #self.ctrlpts = self.mesh.centroids
         scl = np.maximum(self.pars.tetra_project * np.sqrt(self.areas),
                      self.pars.tetra_project_min*np.ones(self.areas.shape)).repeat(3,axis=1)
         self.singpts = self.centroids - scl*self.unormals
 
         nfaces = self.areas.shape[0]
         self.normal_z_project = self.unormals[:,2]
-        #print('shape1 = ',np.asarray([0.,0.,-1.]).reshape([1,3]).repeat(nfaces,axis=0).shape)
-        #print('shape2 = ',self.unormals[:,2].reshape([nfaces,1]).repeat(3,axis=1).shape)
-        #print('shape3 = ',self.unormals.shape)
         self.rel_Ucilia = np.asarray([0.,0.,-1.]).reshape([1,3]).repeat(nfaces,axis=0) + \
             self.unormals[:,2].reshape([nfaces,1]).repeat(3,axis=1)*self.unormals
         self.rel_speed = np.linalg.norm(self.rel_Ucilia,ord=2,axis=1,keepdims=True)
@@ -314,7 +267,6 @@ class Inclusion(Layer):
                  check_normals=True,**kwargs):
         super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,
                          check_normals,**kwargs)
-        #print(self.pars)
         print('Created Inclusion object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
@@ -327,8 +279,6 @@ class Medium(Layer):
                  check_normals=False,**kwargs):
         super().__init__(stlfile,mesh,pars,layer_type,material,density,
                          check_normals,**kwargs)
-        #print(self.pars)
-        #nu = 1.17e-6    #   Kinematic viscosity, meters^2/second
         mu = nu * density
         self.pars.nu = nu
         self.pars.mu = mu
@@ -419,8 +369,6 @@ class Morphology():
         xyz_min = np.asarray([None,None,None],dtype='float').reshape([3,1])
         xyz_max = np.asarray([None,None,None],dtype='float').reshape([3,1])
         for i,layer in enumerate(self.layers):
-            #print('Layer {} of type {}'.format(i,type(layer)))
-            # layer type "Medium" is invisible
             if isinstance(layer,Medium):
                 continue
             elif layer.pars.layer_type == 'surface':
@@ -428,11 +376,6 @@ class Morphology():
                 colors = np.zeros([nfaces,3])
                 colors[:,0] = layer.rel_speed.flatten()
                 colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
-                #xyz_max = layer.mesh.max_
-                #xyz_min = layer.mesh.min_
-                #scale = layer.mesh.points.flatten()
-                #print('scale = ',scale)
-                #print('scale.shape = ',scale.shape)
             elif layer.pars.material == 'lipid':
                 colors = np.asarray([0.,1.,1.])
             elif layer.pars.material == 'calcite':
@@ -446,7 +389,6 @@ class Morphology():
                 if XE is not None:
                     R = R_Euler(XE[3],XE[4],XE[5])
                     Rinv = np.linalg.inv(R)
-                    #vectors[m] = R.dot(vectors[m])
                     vectors[m] = Rinv.dot(vectors[m].T).T
                     vectors[m] += np.repeat(XE[0:3].reshape([1,3]),3,axis=0)
                 xyz_max = np.fmax(np.amax(vectors[m],axis=0).reshape([3,1]),xyz_max)
@@ -455,34 +397,12 @@ class Morphology():
                                                                  shade=False,
                                                                  facecolors=colors,
                                                                  alpha=alpha))
-           # if XE is not None:
-           #     n = vectors.shape[0]
-           #     R = R_Euler(XE[3],XE[4],XE[5])
-           #     Rinv = np.linalg.inv(R)
-           #     for m in range(n):
-           #         #vectors[m] = R.dot(vectors[m])
-           #         vectors[m] = Rinv.dot(vectors[m].T).T
-           #         vectors[m] += np.repeat(XE[0:3].reshape([1,3]),3,axis=0)
-           #         xyz_max = np.fmax(np.amax(vectors[m],axis=0).reshape([3,1]),xyz_max)
-           #         xyz_min = np.fmin(np.amin(vectors[m],axis=0).reshape([3,1]),xyz_min)
-           # axes.add_collection3d(mplot3d.art3d.Poly3DCollection(vectors,
-           #                                                      shade=False,
-           #                                                      facecolors=colors,
-           #                                                      alpha=alpha))
         if autoscale:
-            #axes.auto_scale_xyz(scale,scale,scale)
             xyz_range = np.max(np.abs(xyz_max - xyz_min))
             xyz_mid = (xyz_max + xyz_min)/2
-            #print('xyz_min = ',xyz_min)
-            #print('xyz_max = ',xyz_max)
-            #print('xyz_mid = ',xyz_mid)
-            #print('xyz_range = ',xyz_range)
             axes.set_xlim3d(xyz_mid[0]-f*xyz_range,xyz_mid[0]+f*xyz_range)
             axes.set_ylim3d(xyz_mid[1]-f*xyz_range,xyz_mid[1]+f*xyz_range)
             axes.set_zlim3d(xyz_mid[2]-f*xyz_range,xyz_mid[2]+f*xyz_range)
-            #axes.set_xlim3d(xyz_min[0]-f*xyz_range[0],xyz_max[0]+f*xyz_range[0])
-            #axes.set_ylim3d(xyz_min[1]-f*xyz_range[1],xyz_max[1]+f*xyz_range[1])
-            #axes.set_zlim3d(xyz_min[2]-f*xyz_range[2],xyz_max[2]+f*xyz_range[2])
             axes.set_aspect('equal')
         axes.set_xlabel('$X$ position')
         axes.set_ylabel('$Y$ position')
@@ -499,7 +419,6 @@ class Morphology():
         if tz=='':
             tz = '1'
         scale_txt = 'scale =  {},  {},  {}'.format(tx,ty,tz)
-        #print('axes2: scale_txt = ',scale_txt)
         try:
             axes.texts[0].remove()
         except:
@@ -527,18 +446,13 @@ class Morphology():
                 immersed_in = layer.pars['immersed_in']
                 density = layer.pars['density']
                 density_immersed_in = self.layers[immersed_in].pars['density']
-                #density_diff = density - density_immersed
                 # Buoyancy forces are due to displacement by the surface
-                #layer.pars.F_buoyancy = self.g * density_immersed_in * layer.pars['volume']
                 layer.pars.F_buoyancy = self.g * density_immersed_in * layer.pars['total_volume']
-                #layer.pars.C_buoyancy = layer.pars['cog']
                 layer.pars.C_buoyancy = layer.pars['volume_center']
                 print('F_buoyancy = ',layer.pars.F_buoyancy)
                 print('C_buoyancy = ',layer.pars.C_buoyancy)
                 # begin calculation of gravity forces; CoG's of included layers are weighted by mass
-                #layer.pars.F_gravity = -self.g * density * layer.pars['volume']
                 layer.pars.F_gravity = -self.g * density * layer.pars['total_volume']
-                #layer.pars.C_gravity = self.g*density*layer.pars['volume'] * layer.pars['cog']
                 layer.pars.C_gravity = self.g*density*layer.pars['total_volume'] * layer.pars['volume_center']
                 # Get a list of all inclusions
                 all_inclusions = []
@@ -553,8 +467,6 @@ class Morphology():
                     density = self.layers[i].pars['density']
                     density_immersed_in = self.layers[immersed_in].pars['density']
                     density_diff = density - density_immersed_in
-                    #layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['volume']
-                    #layer.pars.C_gravity = self.g*density_diff*layer.pars['volume'] * layer.pars['cog']
                     layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['total_volume']
                     layer.pars.C_gravity += self.g*density_diff*self.layers[i].pars['total_volume'] * \
                                                                 self.layers[i].pars['volume_center']
@@ -581,7 +493,6 @@ class Morphology():
         
         # Construct influence matrix
         print('Assembling influence matrix')
-        #n_vert = size(VRS_morph(1).vertices,1)
         nfaces = self.layers[surface_layer].areas.shape[0] #size(VRS_morph(1).faces,1)
 
         Q11 = np.zeros([nfaces,nfaces])
@@ -598,8 +509,6 @@ class Morphology():
             U1,U2,U3 = Stokeslet_shape(self.layers[surface_layer].ctrlpts,
                                        self.layers[surface_layer].singpts[iface,:].reshape([1,3]),
                                        np.ones([1,3]),mu)
-            #[U1,U2,U3] = Stokeslet_shape(VRS_morph(1).vertices_skin,VRS_morph(1).vertices_sing(iface,:),[1 1 1])
-    
             #  The function [U1,U2,U3] = Stokeslet_shape(X,P,alpha) returns the
             #  velocities at points X induced by Stokeslets at points P with
             #  strengths alpha.
@@ -647,11 +556,8 @@ class Morphology():
         # cilia and add it to direct forces.
         U_const = np.zeros([1,3])
         S = np.zeros(9)      # Vector of shear velocities
-        #S = np.zeros([1,9])      # Vector of shear velocities
-        #S = np.zeros([9,1])      # Vector of shear velocities
         V_L = np.asarray([0.,0.,0.])
         Omega_L = np.asarray([0.,0.,0.])
-        #V_larva = larval_V(P_center,V_L,Omega_L)
         cil_speed = 1.
         F_cilia_indirect,M_cilia_indirect = solve_flowVRS(self.layers[surface_layer],
                                                           V_L,Omega_L,
@@ -665,12 +571,10 @@ class Morphology():
         # external constant velocities.
         V_L = np.asarray([0.,0.,0.])
         Omega_L = np.asarray([0.,0.,0.])
-        #V_larva = larval_V(P_center,V_L,Omega_L)
         cil_speed = 0.
         S = np.zeros(9)   # Vector of shear velocities
       
         U_const = np.asarray([1.,0.,0.])
-        #[F_C1,M_C1] = solve_flowVRS
         F_C1,M_C1 = solve_flowVRS(self.layers[surface_layer],
                                   V_L,Omega_L,
                                   cil_speed,U_const,S)
@@ -678,14 +582,12 @@ class Morphology():
         self.layers[surface_layer].M_total_C1 = np.sum(M_C1,axis=0,keepdims=True) 
         
         U_const = np.asarray([0.,1.,0.])
-        #[F_C2,M_C2] = solve_flowVRS
         F_C2,M_C2 = solve_flowVRS(self.layers[surface_layer],
                                   V_L,Omega_L,cil_speed,U_const,S)
         self.layers[surface_layer].F_total_C2 = np.sum(F_C2,axis=0,keepdims=True) 
         self.layers[surface_layer].M_total_C2 = np.sum(M_C2,axis=0,keepdims=True) 
         
         U_const = np.asarray([0.,0.,1.])
-        #[F_C3,M_C3] = solve_flowVRS
         F_C3,M_C3 = solve_flowVRS(self.layers[surface_layer],
                                   V_L,Omega_L,cil_speed,U_const,S)
         self.layers[surface_layer].F_total_C3 = np.sum(F_C3,axis=0,keepdims=True) 
@@ -714,19 +616,11 @@ class Morphology():
         self.layers[surface_layer].K_FS = np.zeros([3,9])	
         self.layers[surface_layer].K_MS = np.zeros([3,9])	
 
-        #F_S = np.zeros([nfaces,3,9])
-        #M_S = np.zeros([nfaces,3,9])
-        ##F_S = repmat(NaN,[size(P_center,1),3,9])
-        ##M_S = repmat(NaN,[size(P_center,1),3,9])
-
         for i_S in range(9):
             S = np.zeros([9,1])      # Vector of shear velocities
             S[i_S] = 1		#	Vector of shear velocities	
-            #[F_S1,M_S1] = solve_flowVRS
             F_S1,M_S1 = solve_flowVRS(self.layers[surface_layer],
                                       V_L,Omega_L,cil_speed,U_const,S)
-            #F_S[:,:,i_S] = F_S1
-            #M_S[:,:,i_S] = M_S1
             self.layers[surface_layer].F_total_S1 = np.sum(F_S1,axis=0)
             self.layers[surface_layer].M_total_S1 = np.sum(M_S1,axis=0)
             
@@ -749,32 +643,32 @@ class Morphology():
                                           V_L,Omega_L,cil_speed,U_const,S)
         self.layers[surface_layer].F_total_trans1 = np.sum(F_trans1,axis=0,keepdims=True) 
         self.layers[surface_layer].M_total_trans1 = np.sum(M_trans1,axis=0,keepdims=True) 
-#	Zero external flow; unit larval translation in the y direction; no rotation; zero ciliary action
+        # Zero external flow; unit larval translation in the y direction; no rotation; zero ciliary action
         V_L = np.asarray([0.,1.,0.])
         F_trans2,M_trans2 = solve_flowVRS(self.layers[surface_layer],
                                           V_L,Omega_L,cil_speed,U_const,S)
         self.layers[surface_layer].F_total_trans2 = np.sum(F_trans2,axis=0,keepdims=True) 
         self.layers[surface_layer].M_total_trans2 = np.sum(M_trans2,axis=0,keepdims=True) 
-#	Zero external flow; unit larval translation in the z direction; no rotation; zero ciliary action
+        # Zero external flow; unit larval translation in the z direction; no rotation; zero ciliary action
         V_L = np.asarray([0.,0.,1.])
         F_trans3,M_trans3 = solve_flowVRS(self.layers[surface_layer],
                                           V_L,Omega_L,cil_speed,U_const,S)
         self.layers[surface_layer].F_total_trans3 = np.sum(F_trans3,axis=0,keepdims=True) 
         self.layers[surface_layer].M_total_trans3 = np.sum(M_trans3,axis=0,keepdims=True) 
-#	Zero external flow; unit larval rotation in the x direction; no translation; zero ciliary action
+        # Zero external flow; unit larval rotation in the x direction; no translation; zero ciliary action
         V_L = np.asarray([0.,0.,0.])
         Omega_L = np.asarray([1.,0.,0.])
         F_rot1,M_rot1 = solve_flowVRS(self.layers[surface_layer],
                                       V_L,Omega_L,cil_speed,U_const,S)
         self.layers[surface_layer].F_total_rot1 = np.sum(F_rot1,axis=0,keepdims=True)
         self.layers[surface_layer].M_total_rot1 = np.sum(M_rot1,axis=0,keepdims=True)
-#	Zero external flow; unit larval rotation in the y direction; no translation; zero ciliary action
+        # Zero external flow; unit larval rotation in the y direction; no translation; zero ciliary action
         Omega_L = np.asarray([0.,1.,0.])
         F_rot2,M_rot2 = solve_flowVRS(self.layers[surface_layer],
                                       V_L,Omega_L,cil_speed,U_const,S)
         self.layers[surface_layer].F_total_rot2 = np.sum(F_rot2,axis=0,keepdims=True)
         self.layers[surface_layer].M_total_rot2 = np.sum(M_rot2,axis=0,keepdims=True)
-#	Zero external flow; unit larval rotation in the z direction; no translation; zero ciliary action
+        # Zero external flow; unit larval rotation in the z direction; no translation; zero ciliary action
         Omega_L = np.asarray([0.,0.,1.])
         F_rot3,M_rot3 = solve_flowVRS(self.layers[surface_layer],
                                       V_L,Omega_L,cil_speed,U_const,S)
@@ -800,72 +694,6 @@ class Morphology():
                                                           np.concatenate((self.layers[surface_layer].K_MV,
                                                                           self.layers[surface_layer].K_MW),axis=1))
                                                          ,axis=0)
-        # K_VW = [[K_FV,K_MV];[K_FW,K_MW]]
-
-        #K_FV = [F_total_trans1', F_total_trans2', F_total_trans3']
-        #K_MV = [M_total_trans1', M_total_trans2', M_total_trans3']
-        # 
-        #K_FW = [F_total_rot1', F_total_rot2', F_total_rot3']
-        #K_MW = [M_total_rot1', M_total_rot2', M_total_rot3']
-        #
-        #K_VW = [[K_FV,K_FW];[K_MV,K_MW]]
-        ## K_VW = [[K_FV,K_MV];[K_FW,K_MW]]
-
-#-------------------------------------------
-'''
-VRS_morph(1).F_total_cilia = F_total_cilia
-VRS_morph(1).M_total_cilia = M_total_cilia
-
-VRS_morph(1).F_cilia_indirect = F_cilia_indirect
-VRS_morph(1).M_cilia_indirect = M_cilia_indirect
-
-VRS_morph(1).F_C1 = F_C1
-VRS_morph(1).M_C1 = M_C1
-
-VRS_morph(1).F_C2 = F_C2
-VRS_morph(1).M_C2 = M_C2
-
-VRS_morph(1).F_C3 = F_C3
-VRS_morph(1).M_C3 = M_C3
-
-VRS_morph(1).F_trans1 = F_trans1
-VRS_morph(1).M_trans1 = M_trans1
-
-VRS_morph(1).F_trans2 = F_trans2
-VRS_morph(1).M_trans2 = M_trans2
-
-VRS_morph(1).F_trans3 = F_trans3
-VRS_morph(1).M_trans3 = M_trans3
-
-VRS_morph(1).F_rot1 = F_rot1
-VRS_morph(1).M_rot1 = M_rot1
-
-VRS_morph(1).F_rot2 = F_rot2
-VRS_morph(1).M_rot2 = M_rot2
-
-VRS_morph(1).F_rot3 = F_rot3
-VRS_morph(1).M_rot3 = M_rot3
-
-
-VRS_morph(1).F_S = F_S
-VRS_morph(1).M_S = M_S
-
-
-
-
-VRS_morph(1).K_C = K_C
-VRS_morph(1).K_S = K_S
-VRS_morph(1).K_VW = K_VW
-
-
-#====================================================
-#====================================================
-
-
-VRS_morph_sav = VRS_morph
-tmp = ['save ',directory,filesep,prefix,suffix,' VRS_morph_sav -mat']
-eval(tmp)
-'''
 
 
 

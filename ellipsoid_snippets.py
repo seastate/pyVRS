@@ -1,4 +1,34 @@
 
+
+from meshEllipsoid import chimeraEllipsoid
+
+CE = chimeraEllipsoid(a=50.e-6,bs=[100.e-6,-40.e-6],d=6e-6,nlevels=[16,12])
+CE.plot_tiles()
+
+
+
+====================================================================
+
+import numpy as np
+from semiEllipsoid import SemiEllipsoid
+
+SE = SemiEllipsoid(a=50.e-6,b = 100.e-6,d = 6e-6,nlevel=16)
+SE.tile_quadrant()
+SE.reflect_tiles()
+SE.mirror_tiles(directions=['x','y'])
+
+SE2 = SemiEllipsoid(a=50.e-6,b = ],d = 6e-6,nlevel=12)
+SE2.tile_quadrant()
+SE2.reflect_tiles()
+SE2.mirror_tiles(directions=['x','y'])
+
+SE.vectors = np.append(SE.vectors,SE2.vectors,axis=0)
+SE.get_normals()
+
+SE.plot_tiles()
+
+====================================================================
+
 import numpy as np
 from semiEllipsoid import SemiEllipsoid
 
@@ -16,8 +46,6 @@ SE.vectors = np.append(SE.vectors,SE2.vectors,axis=0)
 SE.get_normals()
 
 SE.plot_tiles()
-
-
 
 ====================================================================
 
