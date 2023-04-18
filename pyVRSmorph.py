@@ -12,7 +12,10 @@ import math
 from attrdict import AttrDict
 
 from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
-from stl_utils import loadSTL
+try:
+    from stl_utils import loadSTL
+except:
+    print('Import of stl_utils (or numpy-stl) failed -- stl file import will not be available.')
 
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
@@ -404,8 +407,7 @@ class Morphology():
                     vectors[m] += np.repeat(XE[0:3].reshape([1,3]),3,axis=0)
                 xyz_max = np.fmax(np.amax(vectors[m],axis=0).reshape([3,1]),xyz_max)
                 xyz_min = np.fmin(np.amin(vectors[m],axis=0).reshape([3,1]),xyz_min)
-            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(vectors,
-                                                                 shade=False,
+            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(vectors,#shade=False,
                                                                  facecolors=colors,
                                                                  alpha=alpha))
         if autoscale:

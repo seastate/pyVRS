@@ -3,7 +3,7 @@
 #   morphologies for Volume Rendered Swimmer hydrodynamic calculations.
 #
 
-from stl import mesh
+#from stl import mesh
 from mpl_toolkits import mplot3d
 from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
