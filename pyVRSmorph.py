@@ -3,7 +3,6 @@
 #   morphologies for Volume Rendered Swimmer hydrodynamic calculations.
 #
 
-from stl import mesh
 from mpl_toolkits import mplot3d
 from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
@@ -13,6 +12,7 @@ import math
 from attrdict import AttrDict
 
 from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
+from stl_utils import loadSTL
 
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
@@ -41,7 +41,7 @@ class Layer():
         or excluding morphological features of a swimming organism) for
         hydrodynamic modeling. 
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},layer_type=None,
+    def __init__(self,stlfile=None,vectors=None,pars={},layer_type=None,
                  material=None,density=None,immersed_in=None,
                  check_normals=True,**kwargs):
         """ Create a layer instance, using an AttrDict object.
@@ -60,44 +60,47 @@ class Layer():
         self.pars.update(pars)
         self.pars.layer_type = layer_type
         self.pars.transformations = []
-        self.mesh = mesh
+        self.vectors = vectors
         self.check_normals = check_normals
         # If provided, load the specified stl file
         self.pars.stlfile = stlfile
+        if vectors is not None:
+            self.vectors=vectors
         if self.pars.stlfile is not None:
             self.loadSTL()
 
     def loadSTL(self,stlfile=None,update=True):
-        """ A convenience method to load an stl flie as a numpy-stl mesh.
+        """ A wrapper method to load an stl file as a numpy-stl mesh.
             numpy-stl creates float32 arrays for vectors and normals, 
             which are subject to errors during calculations. Here they
             are replaced by float64 equivalents.
         """
         if stlfile is not None:
             self.pars.stlfile = stlfile
-        self.mesh = mesh.Mesh.from_file(self.pars.stlfile)
-        # replace arrays with float64 equivalents
-        self.vectors = self.mesh.vectors.copy().astype('float64')
+        # get float64 copy of vectors in the stl file
+        self.vectors = loadSTL(self.pars.stlfile)
         if update:
             self.update()
 
-    def translate_mesh(self,translation,update=True):
-        """ A convenience method to translate the current mesh
-        """
-        self.mesh.translate(translation)
-        self.pars.transformations.append(['trans',translation])
-        self.vectors = self.mesh.vectors.copy().astype('float64')
-        if update:
-            self.update()
+    # Disable numpy-stl based transformations until they can be
+    # replaced by vertor-based ones
+    #def translate_mesh(self,translation,update=True):
+    #    """ A convenience method to translate the current mesh
+    #    """
+    #    self.mesh.translate(translation)
+    #    self.pars.transformations.append(['trans',translation])
+    #    self.vectors = self.mesh.vectors.copy().astype('float64')
+    #    if update:
+    #        self.update()
 
-    def rotate_mesh(self,axis,theta,point=None,update=True):
-        """ A convenience method to rotate the current mesh
-        """
-        self.mesh.rotate(axis,theta=theta,point=point)
-        self.pars.transformations.append(['rot',axis,theta])
-        self.vectors = self.mesh.vectors.copy().astype('float64')
-        if update:
-            self.update()
+    #def rotate_mesh(self,axis,theta,point=None,update=True):
+    #    """ A convenience method to rotate the current mesh
+    #    """
+    #    self.mesh.rotate(axis,theta=theta,point=point)
+    #    self.pars.transformations.append(['rot',axis,theta])
+    #    self.vectors = self.mesh.vectors.copy().astype('float64')
+    #    if update:
+    #        self.update()
 
     def update(self):
         """ A convenience method to initialize or update mesh properties.
@@ -114,9 +117,13 @@ class Layer():
         # either inwards or outwards pointing (leading to erroneous
         # mass property calculations). Areas, centroids and min/max are
         # not affected by this error.
-        self.mesh.update_normals()
-        self.mesh.update_min()
-        self.mesh.update_max()
+        #self.mesh.update_normals()
+        #self.mesh.update_min()
+        #self.mesh.update_max()
+        # Calculate mins and maxes
+        m = self.vectors.shape[0]
+        self.min_ = self.vectors.reshape([3*m,3]).min(axis=0)
+        self.max_ = self.vectors.reshape([3*m,3]).max(axis=0)
         # Get unormals, a set of normals scaled to unit length and
         # corrected to all point outwards
         self.unitnormals()
@@ -124,10 +131,10 @@ class Layer():
         # not consistent, which is the case for many stls. It is based
         # directly off of vertex coordinates, so correcting normals does
         # not correct these calculations.
-        self.pars.volume, self.pars.cog, self.pars.inertia = self.mesh.get_mass_properties()
+        #self.pars.volume, self.pars.cog, self.pars.inertia = self.mesh.get_mass_properties()
         # Corrected calculations for mass properties
         self.pars.total_area = self.areas.sum()
-        m = self.areas.shape[0]
+        #m = self.areas.shape[0]
         self.volumes = self.areas*(self.centroids*self.unormals).sum(axis=1).reshape([m,1])/3
         self.pars.total_volume = self.volumes.sum()
         tet_centroids = 0.75 * self.centroids
@@ -137,7 +144,8 @@ class Layer():
         print('Counting intersections...')
         # If not provided, choose a ref_point guaranteed to be outside shape
         if ref_point is None:
-            ref_point = self.mesh.max_ + np.ones(self.mesh.max_.shape)
+            ref_point = self.max_ + np.ones(self.max_.shape)
+            #ref_point = self.mesh.max_ + np.ones(self.mesh.max_.shape)
             #ref_point2 = self.mesh.min_ - np.ones(self.mesh.max_.shape)
         test_points = self.centroids + project*self.unormals
         m = self.unormals.shape[0]
@@ -221,11 +229,11 @@ class Surface(Layer):
 
         Surface layers are always immersed in the medium, which is (pseudo)layer 0.
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='surface',
+    def __init__(self,stlfile=None,vectors=None,pars={},layer_type='surface',
                  density=1070.,material='tissue',immersed_in=0,
                  get_points=True,check_normals=True,
                  tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,
+        super().__init__(stlfile,vectors,pars,layer_type,material,density,immersed_in,
                          check_normals,**kwargs)
         self.pars.tetra_project = tetra_project
         self.pars.tetra_project_min = tetra_project_min
@@ -262,10 +270,10 @@ class Inclusion(Layer):
         the specified surrounding Layer. This assumption arises in calculations
         of gravity and buoyancy centers and forces.
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='inclusion',
+    def __init__(self,stlfile=None,vectors=None,pars={},layer_type='inclusion',
                  density=1070.,material='seawater',immersed_in=None,
                  check_normals=True,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,material,density,immersed_in,
+        super().__init__(stlfile,vectors,pars,layer_type,material,density,immersed_in,
                          check_normals,**kwargs)
         print('Created Inclusion object with parameters:\n{}'.format(self.pars))
 
@@ -274,10 +282,10 @@ class Medium(Layer):
     """ A derived class to contain the properties of the medium (ambient seawater,
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
-    def __init__(self,stlfile=None,mesh=None,pars={},layer_type='medium',
+    def __init__(self,stlfile=None,vectors=None,pars={},layer_type='medium',
                  density=1070.,material='seawater',nu = 1.17e-6,
                  check_normals=False,**kwargs):
-        super().__init__(stlfile,mesh,pars,layer_type,material,density,
+        super().__init__(stlfile,vectors,pars,layer_type,material,density,
                          check_normals,**kwargs)
         mu = nu * density
         self.pars.nu = nu
@@ -317,7 +325,7 @@ class Morphology():
             if print_pars:
                 print(self.layers[l].pars)
                     
-    def gen_surface(self,stlfile=None,mesh=None,pars={},
+    def gen_surface(self,stlfile=None,vectors=None,pars={},
                         layer_type='surface',get_points=True,
                         material='tissue',immersed_in=0):
         """A method to facilitate generating Surface objects to iniate
@@ -327,7 +335,7 @@ class Morphology():
         """
         try:
             nlayers = len(self.layers)
-            surface = Surface(stlfile=stlfile,mesh=mesh,pars=pars,
+            surface = Surface(stlfile=stlfile,vectors=vectors,pars=pars,
                               density=self.densities[material],
                               layer_type=layer_type,get_points=get_points,
                               material=material,immersed_in=immersed_in)
@@ -339,7 +347,7 @@ class Morphology():
         except:
             print('Failed to load file or generate a Surface object...')
         
-    def gen_inclusion(self,stlfile=None,mesh=None,pars={},
+    def gen_inclusion(self,stlfile=None,vectors=None,pars={},
                         layer_type='inclusion',
                         material='seawater',immersed_in=None):
         """A method to facilitate generating Inclusion objects within a surface
@@ -352,7 +360,7 @@ class Morphology():
             print('Please specify immersed_in, the index of the layer \nsurrounding this inclusion.')
         try:
             nlayers = len(self.layers)
-            inclusion = Inclusion(stlfile=stlfile,mesh=mesh,pars=pars,
+            inclusion = Inclusion(stlfile=stlfile,vectors=vectors,pars=pars,
                               density=self.densities[material],layer_type=layer_type,
                               material=material,immersed_in=immersed_in)
             self.layers.append(inclusion)

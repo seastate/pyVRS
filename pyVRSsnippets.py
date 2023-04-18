@@ -1,6 +1,6 @@
 
 
-from stl import mesh
+#from stl import mesh
 from mpl_toolkits import mplot3d
 from matplotlib import pyplot
 from matplotlib.colors import LightSource
@@ -30,6 +30,9 @@ axes.auto_scale_xyz(scale, scale, scale)
 M.flow_calcs(surface_layer=1)
 
 
+from stl_utils import loadSTL
+estl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_ext.stl'
+vs = loadSTL(stlfile=estl)
 
 #================================================================
 
