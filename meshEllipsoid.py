@@ -14,7 +14,8 @@ class chimeraEllipsoid():
         of two semi-ellipsoids as approximations of microorganism forms for 
         hydrodynamic modeling.
     """
-    def __init__(self,a=None,bs=[],d=None,nlevels=[16,12],levels=True,**kwargs):
+    def __init__(self,a=None,bs=[],d=None,nlevels=[16,12],levels=True,
+                 translate=None,**kwargs):
         # Generate upper semiellipsoid
         SE = semiEllipsoid(a=a,b = bs[0],d = d,nlevel=nlevels[0])
         SE.tile_quadrant()   # Create tiles for 1/8 of the ellipsoid
@@ -29,7 +30,17 @@ class chimeraEllipsoid():
         SE2.get_normals()
         # Combine to form a complete closed shape
         self.vectors = np.append(SE.vectors,SE2.vectors,axis=0)
-        
+        # Translate in xyz, if requested
+        if translate is not None:
+            # trigger an error if translate does not have 3 entries
+            t0 = translate[0]
+            t1 = translate[1]
+            t2 = translate[2]
+            m = self.vectors.shape[0]
+            self.vectors.reshape([3*m,3])[:,0] += t0
+            self.vectors.reshape([3*m,3])[:,1] += t1
+            self.vectors.reshape([3*m,3])[:,2] += t2
+         
     def plot_tiles(self,cla=True,axes=None):
         if axes is None:
             figure = plt.figure()

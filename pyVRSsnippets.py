@@ -36,11 +36,37 @@ vs = loadSTL(stlfile=estl)
 
 #================================================================
 
-#from stl import mesh
-#import numpy as np
-#import math
-#from pyVRSmorph import *
-#from pyVRSflow import *
+from mpl_toolkits import mplot3d
+from matplotlib import pyplot
+from matplotlib.colors import LightSource
+
+pyplot.ion()
+figure = pyplot.figure()
+axes = figure.add_subplot(projection='3d')
+
+import pyVRSmorph as mrph
+import pyVRSflow as flw
+import numpy as np
+from math import pi
+from meshEllipsoid import chimeraEllipsoid
+
+CEsurf = chimeraEllipsoid(a=50.e-6,bs=[100.e-6,-40.e-6],d=6e-6,nlevels=[16,12])
+CEincl = chimeraEllipsoid(a=30.e-6,bs=[50.e-6,-20.e-6],d=5e-6,nlevels=[12,8],translate=[0.,0.,40.e-6])
+#CE.plot_tiles()
+
+
+M = mrph.Morphology()
+M.check_normals = False
+M.gen_surface(vectors=CEsurf.vectors)
+M.gen_inclusion(vectors=CEincl.vectors,material='lipid',immersed_in=1)
+M.plot_layers(axes=axes)
+M.body_calcs()
+M.flow_calcs(surface_layer=1)
+
+S_fixed = -1.*np.asarray([0.,0.,1.,0.,0.,0.,0.,0.,0.])
+U_const_fixed = 0.*np.asarray([1.,0.,0.])
+sim = flw.VRSsim(morph=M)
+sim.run(XEinit=1.*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=20.,cil_speed=0.5*1000*1e-6,U_const_fixed=U_const_fixed,S_fixed=S_fixed)
 
 
 #================================================================
@@ -50,7 +76,7 @@ import pyVRSflow as flw
 import numpy as np
 from math import pi
 
-S_fixed = -10.*np.asarray([0.,0.,1.,0.,0.,0.,0.,0.,0.])
+S_fixed = -3.*np.asarray([0.,0.,1.,0.,0.,0.,0.,0.,0.])
 U_const_fixed = 0.*np.asarray([1.,0.,0.])
 
 M = mrph.Morphology()
@@ -62,7 +88,28 @@ M.body_calcs()
 M.flow_calcs(surface_layer=1)
 
 sim = flw.VRSsim(morph=M)
-sim.run(XEinit=0.001*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=100.,cil_speed=0.5*1000*1e-6,U_const_fixed=U_const_fixed,S_fixed=S_fixed)
+sim.run(XEinit=0.001*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=20.,cil_speed=0.5*1000*1e-6,U_const_fixed=U_const_fixed,S_fixed=S_fixed)
+
+#================================================================
+
+import pyVRSmorph as mrph
+import pyVRSflow as flw
+import numpy as np
+from math import pi
+
+S_fixed = -3.*np.asarray([0.,0.,1.,0.,0.,0.,0.,0.,0.])
+U_const_fixed = 0.*np.asarray([1.,0.,0.])
+
+M = mrph.Morphology()
+estl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_ext.stl'
+istl = '/home/dg/VRS/pyFormex/STLfiles/beta_series_1.000000e-12_1.000000e+00_1.250000e-01_7.500000e-01_1.562500e-02_7.599206e-01_int.stl'
+M.gen_surface(stlfile=estl)
+M.gen_inclusion(stlfile=istl,material='lipid',immersed_in=1)
+M.body_calcs()
+M.flow_calcs(surface_layer=1)
+
+sim = flw.VRSsim(morph=M)
+sim.run(XEinit=0.001*np.asarray([0.,0.,0.,pi/3,-pi/4,pi]),Tmax=30.,cil_speed=0.5*1000*1e-6,U_const_fixed=U_const_fixed,S_fixed=S_fixed)
 
 
 

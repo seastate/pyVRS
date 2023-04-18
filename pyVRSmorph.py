@@ -66,6 +66,7 @@ class Layer():
         self.pars.stlfile = stlfile
         if vectors is not None:
             self.vectors=vectors
+            self.update()
         if self.pars.stlfile is not None:
             self.loadSTL()
 
@@ -338,7 +339,8 @@ class Morphology():
             surface = Surface(stlfile=stlfile,vectors=vectors,pars=pars,
                               density=self.densities[material],
                               layer_type=layer_type,get_points=get_points,
-                              material=material,immersed_in=immersed_in)
+                              material=material,immersed_in=immersed_in,
+                              check_normals=self.check_normals)
             self.layers.append(surface)
             # Add new layer to the layer which contains it
             self.layers[surface.pars.immersed_in].pars['contains'].append(nlayers)
@@ -362,7 +364,8 @@ class Morphology():
             nlayers = len(self.layers)
             inclusion = Inclusion(stlfile=stlfile,vectors=vectors,pars=pars,
                               density=self.densities[material],layer_type=layer_type,
-                              material=material,immersed_in=immersed_in)
+                              material=material,immersed_in=immersed_in,
+                              check_normals=self.check_normals)
             self.layers.append(inclusion)
             # Add new layer to the layer which contains it
             print('Adding new layer to container...')
