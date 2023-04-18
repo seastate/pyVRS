@@ -13,6 +13,7 @@ SE2.reflect_tiles()
 SE2.mirror_tiles(directions=['x','y'])
 
 SE.vectors = np.append(SE.vectors,SE2.vectors,axis=0)
+SE.get_normals()
 
 SE.plot_tiles()
 

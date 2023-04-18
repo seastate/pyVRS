@@ -177,7 +177,38 @@ class SemiEllipsoid():
         axes.set_ylabel('$Y$ position')
         axes.set_zlabel('$Z$ position')
 
-
+    def get_normals(self,check_normals=True,ref_point=None,outwards=True,correct=True):
+        v0 = self.vectors[:, 0]
+        v1 = self.vectors[:, 1]
+        v2 = self.vectors[:, 2]
+        n = self.vectors.shape[0]
+        self.normals = np.cross(v1 - v0, v2 - v0)
+        self.areas = .5 * np.sqrt((self.normals ** 2).sum(axis=1,keepdims=True))
+        self.centroids = np.mean([v0,v1,v2], axis=0)
+        self.lengths = np.sqrt((self.normals**2).sum(axis=1,keepdims=True)).repeat(3,axis=1)
+        self.unormals = self.normals / self.lengths
+        # checking normals is time-consuming, so do it only when check_normals is True
+        # (only for Surface layers).
+        if check_normals:
+            #counts = self.count_intersections()
+            #evens = counts % 2==0
+            #odds = counts % 2!=0
+            #s = np.zeros(counts.shape)
+            #s[odds] = -1
+            #s[evens] = 1
+            # correct directions for inwards pointing normals
+            #self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
+            # The original kludge, for centered ellisoids only...
+            #if outwards:
+            if ref_point is None:
+                ref_point = [0.,0.,0.] 
+            self.ref_point = ref_point
+            self.s = np.sign(np.sum(self.centroids * self.unormals,axis=1))
+            self.unormals *= self.s.reshape([self.s.shape[0],1]).repeat(3,axis=1)
+            if correct:
+                for i in range(self.vectors.shape[0]):
+                    if self.s[i] == -1:
+                        self.vectors[i,1:3,:] = np.flip(self.vectors[i,1:3,:],axis=0)
 
 
 
