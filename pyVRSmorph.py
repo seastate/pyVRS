@@ -13,7 +13,8 @@ import math
 
 from attrdict import AttrDict
 
-from EllipsoidSwimND.pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
+from pyVRSutils import n2s_fmt
+from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
 #try:
 #    from EllipsoidSwimND.stl_utils import loadSTL
 #except:
@@ -381,7 +382,7 @@ class Morphology():
             print('Failed to load file to generate a Inclusion object...')
 
     def plot_layers(self,axes,alpha=0.5,autoscale=True,XE=None,f=0.75):
-        """A method to simplify basic 3D visualizatioin of larval morphologies.
+        """A method to simplify basic 3D visualization of larval morphologies.
         """
         xyz_min = np.asarray([None,None,None],dtype='float').reshape([3,1])
         xyz_max = np.asarray([None,None,None],dtype='float').reshape([3,1])
@@ -744,5 +745,5 @@ class MorphologyND(Morphology):
         self.g = 1 # scaled to 1 in nondimensionalization
         # Add an attribute to store Layers. The medium (typically
         # ambient seawater) is always the 0th layer
-        self.layers = [Medium(density=self.densities['seawater',nu = 1])]
+        self.layers = [Medium(density=self.densities['seawater'],nu = 1)]
 

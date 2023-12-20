@@ -13,6 +13,7 @@ from math import ceil, sin, cos, pi, sqrt
 from scipy.integrate import odeint, solve_ivp
 
 #from attrdict import AttrDict
+from pyVRSutils import n2s_fmt
 
 #plt.ion()
 #plt.ioff()
@@ -298,7 +299,8 @@ class VRSsim():
             #print('sol.t = ',sol.t)
             self.XE = sol.y[:,-1]
             self.VEdot = self.Rotated_CoordsVRS(t_next,self.XE)
-            title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,self.XE[0:3],self.VEdot[0:3])
+            title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,n2s_fmt(self.XE[0:3]),n2s_fmt(self.VEdot[0:3]))
+            #title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,self.XE[0:3],self.VEdot[0:3])
             #self.fig.clf()
             self.axes1.set_title(title_str1)
             self.axes1.plot([XE_old[0],self.XE[0]],[XE_old[1],self.XE[1]],[XE_old[2],self.XE[2]],c='blue')
@@ -335,7 +337,8 @@ class VRSsim():
             self.axes2.cla()
             self.morph.plot_layers(axes=self.axes2,XE=self.XE)
             speed = sqrt((self.VEdot[0:3]**2).sum())
-            title_str2 = '{}\n{}'.format(self.XE[3:6],speed)
+            #title_str2 = '{}\n{}'.format(self.XE[3:6],speed)
+            title_str2 = '{}\n{}'.format(n2s_fmt(self.XE[3:6]),n2s_fmnt(speed))
             self.axes2.set_title(title_str2)
 
             self.figV.canvas.draw()
