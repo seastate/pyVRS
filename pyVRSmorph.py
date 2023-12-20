@@ -9,13 +9,15 @@ from matplotlib.colors import LightSource
 import numpy as np
 import math
 
+#plt.ioff()
+
 from attrdict import AttrDict
 
-from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
-try:
-    from stl_utils import loadSTL
-except:
-    print('Import of stl_utils (or numpy-stl) failed -- stl file import will not be available.')
+from EllipsoidSwimND.pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
+#try:
+#    from EllipsoidSwimND.stl_utils import loadSTL
+#except:
+#    print('Import of stl_utils (or numpy-stl) failed -- stl file import will not be available.')
 
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
@@ -49,7 +51,7 @@ class Layer():
                  check_normals=True,**kwargs):
         """ Create a layer instance, using an AttrDict object.
         """
-        super().__init__(**kwargs)
+        #super().__init__(**kwargs) # currently not a derived class
         # Default base parameters
         base_pars={'density':density,
                    'material':material,
@@ -87,7 +89,7 @@ class Layer():
             self.update()
 
     # Disable numpy-stl based transformations until they can be
-    # replaced by vertor-based ones
+    # replaced by vector-based ones
     #def translate_mesh(self,translation,update=True):
     #    """ A convenience method to translate the current mesh
     #    """
@@ -133,7 +135,7 @@ class Layer():
         self.unitnormals()
         # The following gives erroneous values when vertex direction is
         # not consistent, which is the case for many stls. It is based
-        # directly off of vertex coordinates, so correcting normals does
+        # directly on vertex coordinates, so correcting normals does
         # not correct these calculations.
         #self.pars.volume, self.pars.cog, self.pars.inertia = self.mesh.get_mass_properties()
         # Corrected calculations for mass properties
@@ -227,7 +229,7 @@ class Layer():
             self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
 
 class Surface(Layer):
-    """ A derived class to contain an surface Layer, which additionally 
+    """ A derived class to contain a surface Layer, which additionally 
         includes singularities associated with boundary conditions and ciliary
         forces, control points on the skin, etc.
 
@@ -287,7 +289,7 @@ class Medium(Layer):
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
     def __init__(self,stlfile=None,vectors=None,pars={},layer_type='medium',
-                 density=1070.,material='seawater',nu = 1.17e-6,
+                 density=1030.,material='seawater',nu = 1.17e-6,
                  check_normals=False,**kwargs):
         super().__init__(stlfile,vectors,pars,layer_type,material,density,
                          check_normals,**kwargs)
@@ -306,8 +308,9 @@ class Morphology():
         """ Create a morphology instance, using an AttrDict object.
  
         """
-        super().__init__(**kwargs)
-        base_densities={'seawater':1030.,
+        #super().__init__(**kwargs) # currently is not a derived class
+        base_densities={'freshwater':1000.,
+                    'seawater':1030.,
                     'tissue':1070.,
                     'lipid':900.,
                     'calcite':2669.}
@@ -396,6 +399,8 @@ class Morphology():
                 colors = 'gray'
             elif layer.pars.material == 'seawater':
                 colors = np.asarray([0.3,0.3,0.3])
+            elif layer.pars.material == 'freshwater':
+                colors = np.asarray([0.1,0.3,0.3])
             else:
                 print('Unknown layer material in plot_layers; skipping layer {}'.format(i))
             vectors = layer.vectors.copy()
@@ -709,4 +714,35 @@ class Morphology():
                                                          ,axis=0)
 
 
+#==============================================================================
+class MorphologyND(Morphology):
+    """ A derived class to faciliate specifications and calculations with nondimensionalized
+        organismal morphologies. This class is structurally equivalent to a dimensional
+        morphology. The purpose of this classes are: (a) to clarify which of a large set
+        of morphologies are nondimensional, using the object type as a filter; and (b) to
+        streamline conversion of dimensional scenarios to nondimensional ones, and vice
+        versa.
+    """
+    def __init__(self,densities={},g=9.81,**kwargs):
+        """ Create a morphology instance, using an AttrDict object.
+ 
+        """
+        super().__init__(densities,g,**kwargs)
+        base_densities={'freshwater':1000.,
+                    'seawater':1030.,
+                    'tissue':1070.,
+                    'lipid':900.,
+                    'calcite':2669.}
+        # Update with passed parameters
+        self.densities=AttrDict(base_densities)
+        self.densities.update(densities)
+        # nondimensionalize densities by medium (seawater) density
+        reference_density = self.densities['seawater']
+        for mtrl,dens in self.densities.items():
+            self.densities.update({mtrl:dens/reference_density})
+        print('Updated densities: ',self.densities)
+        self.g = 1 # scaled to 1 in nondimensionalization
+        # Add an attribute to store Layers. The medium (typically
+        # ambient seawater) is always the 0th layer
+        self.layers = [Medium(density=self.densities['seawater',nu = 1])]
 

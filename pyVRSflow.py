@@ -12,10 +12,10 @@ import numpy as np
 from math import ceil, sin, cos, pi, sqrt
 from scipy.integrate import odeint, solve_ivp
 
-from attrdict import AttrDict
+#from attrdict import AttrDict
 
-plt.ion()
-
+#plt.ion()
+#plt.ioff()
 
 #==============================================================================
 def Stokeslet_shape(X,C,alpha,mu):
@@ -166,12 +166,12 @@ def flowfield3(X,**kwargs):
     #print(kwargs)
     try:
         flowfield3.U_const_fixed = kwargs['U_const_fixed']
-        print('flowfield -- defined field U_const_fixed as ',flowfield3.U_const_fixed)
+        #print('flowfield -- defined field U_const_fixed as ',flowfield3.U_const_fixed)
     except:
         pass
     try:
         flowfield3.S_fixed = kwargs['S_fixed']
-        print('flowfield -- defined field S_fixed as ',flowfield3.S_fixed)
+        #print('flowfield -- defined field S_fixed as ',flowfield3.S_fixed)
     except:
         pass
     #print('here too')
@@ -223,7 +223,7 @@ class VRSsim():
     #             cil_speed = 0.,
     #             Tmax=1,dt_plot=0.25,
     #             dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
-    def __init__(self,morph=None,surface_layer=1):
+    def __init__(self,morph=None,surface_layer=1,fig=None,fignum=None):
         self.morph = morph
         self.surface_layer = surface_layer
 
@@ -242,9 +242,14 @@ class VRSsim():
         self.K_C = self.morph.layers[self.surface_layer].K_C
         
         # Set up graphics
-        self.fig = plt.figure()
-        self.axes1 = self.fig.add_subplot(1,2,1,projection='3d')
-        self.axes2 = self.fig.add_subplot(1,2,2,projection='3d')
+        self.fignum = fignum
+        if fig is not None:
+            self.figV = fig
+        else:
+            print('Creating new figure...')
+            self.figV = plt.figure(num=self.fignum)
+        self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
+        self.axes2 = self.figV.add_subplot(1,2,2,projection='3d')
         
         #self.morph.plot_layers(axes=self.axes2,XE=XEinit)
         plt.pause(1e-3)
@@ -269,6 +274,7 @@ class VRSsim():
         self.Tmax = Tmax
         self.nsteps = ceil(self.Tmax/self.dt_plot)
         #XE = self.XEinit.reshape([6,])
+        ###self.fig = plt.figure(num=self.fignum)
         self.axes1.scatter(self.XE[0],self.XE[1],self.XE[2],c='red')
         #self.axes1.set_aspect('equal')
         if not resume:
@@ -293,6 +299,7 @@ class VRSsim():
             self.XE = sol.y[:,-1]
             self.VEdot = self.Rotated_CoordsVRS(t_next,self.XE)
             title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,self.XE[0:3],self.VEdot[0:3])
+            #self.fig.clf()
             self.axes1.set_title(title_str1)
             self.axes1.plot([XE_old[0],self.XE[0]],[XE_old[1],self.XE[1]],[XE_old[2],self.XE[2]],c='blue')
             #self.axes1.set_aspect('equal')
@@ -316,7 +323,6 @@ class VRSsim():
             except:
                 pass
             self.axes1.text2D(0.05, 0.95, scale_txt, transform=self.axes1.transAxes)
-           #self.axes1.xaxis.offset_text_position='top'
             #self.axes1.yaxis.offset_text_position='top'
             #self.axes1.zaxis.offset_text_position='top'
             #self.axes1.set_box_aspect((np.ptp(xs), np.ptp(ys), np.ptp(zs)))  # aspect ratio is 1:1:1 in data space
@@ -331,6 +337,10 @@ class VRSsim():
             speed = sqrt((self.VEdot[0:3]**2).sum())
             title_str2 = '{}\n{}'.format(self.XE[3:6],speed)
             self.axes2.set_title(title_str2)
+
+            self.figV.canvas.draw()
+            self.figV.canvas.flush_events()
+            
             plt.pause(1e-3)
     
     #def Rotated_CoordsVRS(self,XE,t):
