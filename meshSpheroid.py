@@ -9,23 +9,57 @@ from math import *
 #plt.ioff()
 Exy = lambda t_,a_,b_: (a_*cos(t_),b_*sin(t_))
 
-class chimeraEllipsoid():
+class chimeraSpheroid():
     """ A class to facilitate creating and modifying meshes forming chimeras 
-        of two semi-ellipsoids as approximations of microorganism forms for 
+        of two semi-spheroids as approximations of microorganism forms for 
         hydrodynamic modeling.
+
+        The resulting chimera has diameter D, with the upper semi-spheroid of 
+        height L1 and the lower of height L2.
+
+        Tiling for the chimera is produced separately for the upper and lower
+        semispheroids, using the semiSpheroid class methods. Note that this 
+        class defined the horizontal section with radius rather than diameter,
+        and defines the lower semispheroid with a negative height.
     """
-    def __init__(self,a=None,bs=[],d=None,nlevels=[16,12],levels=True,
-                 translate=None,**kwargs):
-        # Generate upper semiellipsoid
-        SE = semiEllipsoid(a=a,b = bs[0],d = d,nlevel=nlevels[0])
-        SE.tile_quadrant()   # Create tiles for 1/8 of the ellipsoid
-        SE.reflect_tiles()   # Reflect and mirror to complete upper semiellipsoid
+    def __init__(self,D=None,L1=None,L2=None,d=None,nlevels=[16,12],levels=True,
+                 translate=None,calc=True,tile=True,**kwargs):
+        # Add geometric parameters as characteristics
+        self.D = D
+        self.L1 = L1
+        self.L2 = L2
+        # Add tiling parameters as characteristics
+        self.d = d
+        self.nlevels = nlevels
+        self.levels = levels
+        # If requested, calculate shape parameters (fails if numerical values
+        # are not supplied)
+        if calc:
+            self.get_shape_params()
+            # If requested (and numerical values are supplied), calculate tiles
+            if tile:
+                get_tiles()
+
+    def get_shape_params(self):
+        # Calculate shape parameters
+        self.L0 = self.L1 + self.L2
+        self.alpha = self.L0/self.D
+        self.eta = self.L2/self.L0
+        
+    def get_tiles(self):
+        # Generate tiles for the upper semispheroid, using radius a = D/2, and 
+        # the upper height parameter b=L1 projecting upwards
+        SE = semiSpheroid(a=D/2,b = L1,d = d,nlevel=nlevels[0])
+        SE.tile_quadrant()   # Create tiles for 1/8 of the spheroid
+        SE.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE.mirror_tiles(directions=['x','y'])
         SE.get_normals()
-        # Generate lower semiellipsoid
-        SE2 = semiEllipsoid(a=a,b = bs[1],d = d,nlevel=nlevels[1])
-        SE2.tile_quadrant()   # Create tiles for 1/8 of the ellipsoid
-        SE2.reflect_tiles()   # Reflect and mirror to complete upper semiellipsoid
+        # Generate tiles for the lower semispheroid, using radius a = D/2, and
+        # the lower height parameter b=-L2 projecting downwards (preserves exact
+        # symmetries with upper semispheroid)
+        SE2 = semiSpheroid(a=D/2,b = -L2,d = d,nlevel=nlevels[1])
+        SE2.tile_quadrant()   # Create tiles for 1/8 of the spheroid
+        SE2.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE2.mirror_tiles(directions=['x','y'])
         SE2.get_normals()
         # Combine to form a complete closed shape
@@ -57,14 +91,19 @@ class chimeraEllipsoid():
         axes.set_zlabel('$Z$ position')
 
 
-class semiEllipsoid():
-    """ A class to facilitate creating and modifying meshes forming semi-ellipsoids
+class semiSpheroid():
+    """ A class to facilitate creating and modifying meshes forming semi-spheroids
         to be combined to contruct approximations of microorganism forms for
         hydrodynamic modeling. A constraint is observed that constructed meshes
         must have 4-fold symmetry, to prevent artifacts such as twisting in 
         the swimming of modeled morphologies. Another constraint is that the
         order of vertices in faces conform to the normal formed by the cross
         product of the first two vertex pairs be outward-pointing.
+
+        a: radius of intersection with the xy plane
+        b: height of semispheroid above the xy plane
+            b>0 implies the semispheroid projects in the positive z-direction
+            b<0 implies the semispheroid projects in the negative z-direction
     """
     def __init__(self,a=None,b=None,d=None,nlevel=32,levels=True,**kwargs):
 
