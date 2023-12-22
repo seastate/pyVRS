@@ -28,6 +28,7 @@ class chimeraSpheroid():
         self.D = D
         self.L1 = L1
         self.L2 = L2
+        self.translate = translate
         # Add tiling parameters as characteristics
         self.d = d
         self.nlevels = nlevels
@@ -38,7 +39,7 @@ class chimeraSpheroid():
             self.get_shape_params()
             # If requested (and numerical values are supplied), calculate tiles
             if tile:
-                get_tiles()
+                self.get_tiles()
 
     def get_shape_params(self):
         # Calculate shape parameters
@@ -49,7 +50,7 @@ class chimeraSpheroid():
     def get_tiles(self):
         # Generate tiles for the upper semispheroid, using radius a = D/2, and 
         # the upper height parameter b=L1 projecting upwards
-        SE = semiSpheroid(a=D/2,b = L1,d = d,nlevel=nlevels[0])
+        SE = semiSpheroid(a=self.D/2,b = self.L1,d = self.d,nlevel=self.nlevels[0])
         SE.tile_quadrant()   # Create tiles for 1/8 of the spheroid
         SE.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE.mirror_tiles(directions=['x','y'])
@@ -57,7 +58,7 @@ class chimeraSpheroid():
         # Generate tiles for the lower semispheroid, using radius a = D/2, and
         # the lower height parameter b=-L2 projecting downwards (preserves exact
         # symmetries with upper semispheroid)
-        SE2 = semiSpheroid(a=D/2,b = -L2,d = d,nlevel=nlevels[1])
+        SE2 = semiSpheroid(a=self.D/2,b = self.L2,d = self.d,nlevel=self.nlevels[1])
         SE2.tile_quadrant()   # Create tiles for 1/8 of the spheroid
         SE2.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE2.mirror_tiles(directions=['x','y'])
@@ -65,11 +66,11 @@ class chimeraSpheroid():
         # Combine to form a complete closed shape
         self.vectors = np.append(SE.vectors,SE2.vectors,axis=0)
         # Translate in xyz, if requested
-        if translate is not None:
+        if self.translate is not None:
             # trigger an error if translate does not have 3 entries
-            t0 = translate[0]
-            t1 = translate[1]
-            t2 = translate[2]
+            t0 = self.translate[0]
+            t1 = self.translate[1]
+            t2 = self.translate[2]
             m = self.vectors.shape[0]
             self.vectors.reshape([3*m,3])[:,0] += t0
             self.vectors.reshape([3*m,3])[:,1] += t1
