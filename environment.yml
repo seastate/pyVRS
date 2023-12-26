@@ -6,15 +6,16 @@ channels:
 dependencies:
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
-  - alsa-lib=1.2.8=h166bdaf_0
+  - alsa-lib=1.2.10=hd590300_0
   - asttokens=2.4.1=pyhd8ed1ab_0
   - attr=2.5.1=h166bdaf_1
+  - attrdict3=2.0.2=pyhd8ed1ab_0
   - backcall=0.2.0=pyh9f0ad1d_0
   - brotli=1.1.0=hd590300_1
   - brotli-bin=1.1.0=hd590300_1
   - bzip2=1.0.8=hd590300_5
   - ca-certificates=2023.11.17=hbcca054_0
-  - cairo=1.16.0=ha61ee94_1014
+  - cairo=1.18.0=h3faef2a_0
   - certifi=2023.11.17=pyhd8ed1ab_0
   - comm=0.1.4=pyhd8ed1ab_0
   - contourpy=1.2.0=py311h9547e67_0
@@ -41,11 +42,11 @@ dependencies:
   - glib=2.78.3=hfc55251_0
   - glib-tools=2.78.3=hfc55251_0
   - graphite2=1.3.13=h58526e2_1001
-  - gst-plugins-base=1.22.0=h4243ec0_2
-  - gstreamer=1.22.0=h25f0c4b_2
+  - gst-plugins-base=1.14.1=h6a678d5_1
+  - gstreamer=1.14.1=h5eee18b_1
   - gstreamer-orc=0.4.34=hd590300_0
-  - harfbuzz=6.0.0=h8e241bc_0
-  - icu=70.1=h27087fc_0
+  - harfbuzz=8.3.0=h3d44ed6_0
+  - icu=73.2=h59595ed_0
   - importlib-metadata=7.0.1=pyha770c72_0
   - importlib_metadata=7.0.1=hd8ed1ab_0
   - ipykernel=6.26.0=pyhf8b6a83_0
@@ -53,7 +54,7 @@ dependencies:
   - ipython=8.19.0=pyh707e725_0
   - ipython_genutils=0.2.0=py_1
   - ipywidgets=8.1.1=pyhd8ed1ab_0
-  - jack=1.9.22=h11f4161_0
+  - jack=1.9.22=h7c63dc7_2
   - jedi=0.19.1=pyhd8ed1ab_0
   - jpeg=9e=h0b41bf4_3
   - jupyter_client=8.6.0=pyhd8ed1ab_0
@@ -66,19 +67,20 @@ dependencies:
   - lcms2=2.15=hfd0df8a_0
   - ld_impl_linux-64=2.40=h41732ed_0
   - lerc=4.0.0=h27087fc_0
+  - libabseil=20230802.1=cxx17_h59595ed_0
   - libblas=3.9.0=20_linux64_openblas
   - libbrotlicommon=1.1.0=hd590300_1
   - libbrotlidec=1.1.0=hd590300_1
   - libbrotlienc=1.1.0=hd590300_1
-  - libcap=2.67=he9d0100_0
+  - libcap=2.69=h0f662aa_0
   - libcblas=3.9.0=20_linux64_openblas
-  - libclang=15.0.7=default_hb11cfb5_4
-  - libclang13=15.0.7=default_ha2b6cf4_4
+  - libclang=14.0.6=default_h7634d5b_1
+  - libclang13=14.0.6=default_h9986a30_1
   - libcups=2.3.3=h36d4200_3
   - libdb=6.2.32=h9c3ff4c_0
   - libdeflate=1.17=h0b41bf4_0
   - libedit=3.1.20191231=he28a2e2_2
-  - libevent=2.1.10=h28343ad_4
+  - libevent=2.1.12=hf998b51_1
   - libexpat=2.5.0=hcb278e6_1
   - libffi=3.4.4=h6a678d5_0
   - libflac=1.4.3=h59595ed_0
@@ -92,30 +94,30 @@ dependencies:
   - libiconv=1.17=hd590300_2
   - liblapack=3.9.0=20_linux64_openblas
   - libllvm14=14.0.6=hcd5def8_4
-  - libllvm15=15.0.7=hadd5161_1
+  - libllvm15=15.0.7=hb3ce162_4
   - libnsl=2.0.1=hd590300_0
   - libntlm=1.4=h7f98852_1002
   - libogg=1.3.4=h7f98852_1
   - libopenblas=0.3.25=pthreads_h413a1c8_0
   - libopus=1.3.1=h7f98852_1
   - libpng=1.6.39=h753d276_0
-  - libpq=15.3=hbcd7760_1
-  - libprotobuf=3.21.12=hfc55251_2
+  - libpq=12.15=hdbd6064_1
+  - libprotobuf=4.24.4=hf27288f_0
   - libsndfile=1.2.2=hc60ed4a_1
   - libsodium=1.0.18=h36c2ea0_1
   - libsqlite=3.44.2=h2797004_0
   - libstdcxx-ng=13.2.0=h7e041cc_3
-  - libsystemd0=253=h8c4010b_1
+  - libsystemd0=255=h3516f8a_0
   - libtiff=4.5.0=h6adf6a1_2
   - libtool=2.4.7=h27087fc_0
-  - libudev1=253=h0b41bf4_1
+  - libudev1=255=h3f72095_0
   - libuuid=2.38.1=h0b41bf4_0
   - libvorbis=1.3.7=h9c3ff4c_0
   - libwebp=1.3.2=h11a3e52_0
   - libwebp-base=1.3.2=hd590300_0
-  - libxcb=1.13=h7f98852_1004
-  - libxkbcommon=1.5.0=h79f4944_1
-  - libxml2=2.10.3=hca2bb57_4
+  - libxcb=1.15=h0b41bf4_0
+  - libxkbcommon=1.6.0=hd429924_1
+  - libxml2=2.12.3=h232c23b_0
   - libzlib=1.2.13=hd590300_5
   - lz4-c=1.9.4=hcb278e6_0
   - matplotlib=3.8.2=py311h38be061_0
@@ -124,19 +126,19 @@ dependencies:
   - mpg123=1.32.3=h59595ed_0
   - mpl-interactions=0.24.1=pyhd8ed1ab_0
   - munkres=1.1.4=pyh9f0ad1d_0
-  - mysql=8.0.32=h27aab58_0
-  - mysql-client=8.0.32=hb89bdb7_0
-  - mysql-common=8.0.32=ha901b37_0
-  - mysql-devel=8.0.32=ha901b37_0
-  - mysql-libs=8.0.32=hd7da12d_0
-  - mysql-server=8.0.32=h02d985f_0
+  - mysql=5.7.20=hf484d3e_1001
+  - mysql-client=8.0.33=h545f5f4_6
+  - mysql-common=8.0.33=hf1915f5_6
+  - mysql-devel=8.0.33=hf1915f5_6
+  - mysql-libs=8.0.33=hca2cd23_6
+  - mysql-server=8.0.33=he45e2b4_6
   - ncurses=6.4=h59595ed_2
   - nest-asyncio=1.5.8=pyhd8ed1ab_0
   - nspr=4.35=h27087fc_0
   - nss=3.96=h1d7d5a4_0
   - numpy=1.26.2=py311h64a7726_0
   - openjpeg=2.5.0=hfec8fc6_2
-  - openssl=3.1.4=hd590300_0
+  - openssl=3.2.0=hd590300_1
   - packaging=23.2=pyhd8ed1ab_0
   - parso=0.8.3=pyhd8ed1ab_0
   - pcre2=10.42=hcad00b1_0
@@ -151,9 +153,9 @@ dependencies:
   - psutil=5.9.7=py311h459d7ec_0
   - pthread-stubs=0.4=h36c2ea0_1001
   - ptyprocess=0.7.0=pyhd3deb0d_0
-  - pulseaudio=16.1=hcb278e6_3
-  - pulseaudio-client=16.1=h5195f5e_3
-  - pulseaudio-daemon=16.1=ha8d29e2_3
+  - pulseaudio=16.1=h59595ed_5
+  - pulseaudio-client=16.1=hb77b528_5
+  - pulseaudio-daemon=16.1=haa314ec_5
   - pure_eval=0.2.2=pyhd8ed1ab_0
   - pygments=2.17.2=pyhd8ed1ab_0
   - pyparsing=3.1.1=pyhd8ed1ab_0
@@ -163,7 +165,7 @@ dependencies:
   - python-dateutil=2.8.2=pyhd8ed1ab_0
   - python_abi=3.11=4_cp311
   - pyzmq=25.1.2=py311h34ded2d_0
-  - qt-main=5.15.8=h5d23da1_6
+  - qt-main=5.15.2=h53bd1ea_10
   - readline=8.2=h8228510_1
   - scipy=1.11.4=py311h64a7726_0
   - setuptools=68.2.2=pyhd8ed1ab_0
@@ -180,20 +182,20 @@ dependencies:
   - wcwidth=0.2.12=pyhd8ed1ab_0
   - wheel=0.42.0=pyhd8ed1ab_0
   - widgetsnbextension=4.0.9=pyhd8ed1ab_0
-  - xcb-util=0.4.0=h516909a_0
-  - xcb-util-image=0.4.0=h166bdaf_0
-  - xcb-util-keysyms=0.4.0=h516909a_0
-  - xcb-util-renderutil=0.3.9=h166bdaf_0
-  - xcb-util-wm=0.4.1=h516909a_0
-  - xkeyboard-config=2.38=h0b41bf4_0
+  - xcb-util=0.4.0=hd590300_1
+  - xcb-util-image=0.4.0=h8ee46fc_1
+  - xcb-util-keysyms=0.4.0=h8ee46fc_1
+  - xcb-util-renderutil=0.3.9=hd590300_1
+  - xcb-util-wm=0.4.1=h8ee46fc_1
+  - xkeyboard-config=2.40=hd590300_0
   - xorg-kbproto=1.0.7=h7f98852_1002
   - xorg-libice=1.1.1=hd590300_0
   - xorg-libsm=1.2.4=h7391055_0
-  - xorg-libx11=1.8.4=h0b41bf4_0
+  - xorg-libx11=1.8.7=h8ee46fc_0
   - xorg-libxau=1.0.11=hd590300_0
   - xorg-libxdmcp=1.1.3=h7f98852_0
   - xorg-libxext=1.3.4=h0b41bf4_2
-  - xorg-libxrender=0.9.10=h7f98852_1003
+  - xorg-libxrender=0.9.11=hd590300_0
   - xorg-renderproto=0.11.1=h7f98852_1002
   - xorg-xextproto=7.3.0=h0b41bf4_1003
   - xorg-xproto=7.0.31=h7f98852_1007
