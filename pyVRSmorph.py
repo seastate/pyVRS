@@ -9,16 +9,10 @@ from matplotlib.colors import LightSource
 import numpy as np
 import math
 
-#plt.ioff()
-
 from attrdict import AttrDict
 
 from pyVRSutils import n2s_fmt
 from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
-#try:
-#    from EllipsoidSwimND.stl_utils import loadSTL
-#except:
-#    print('Import of stl_utils (or numpy-stl) failed -- stl file import will not be available.')
 
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
@@ -52,7 +46,6 @@ class Layer():
                  check_normals=True,**kwargs):
         """ Create a layer instance, using an AttrDict object.
         """
-        #super().__init__(**kwargs) # currently not a derived class
         # Default base parameters
         base_pars={'density':density,
                    'material':material,
