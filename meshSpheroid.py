@@ -58,7 +58,7 @@ class chimeraSpheroid():
         # Generate tiles for the lower semispheroid, using radius a = D/2, and
         # the lower height parameter b=-L2 projecting downwards (preserves exact
         # symmetries with upper semispheroid)
-        SE2 = semiSpheroid(a=self.D/2,b = self.L2,d = self.d,nlevel=self.nlevels[1])
+        SE2 = semiSpheroid(a=self.D/2,b = -self.L2,d = self.d,nlevel=self.nlevels[1])
         SE2.tile_quadrant()   # Create tiles for 1/8 of the spheroid
         SE2.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE2.mirror_tiles(directions=['x','y'])
@@ -156,7 +156,7 @@ class semiSpheroid():
             w0 = trange[0]
             w1 = trange[1]
         for i in range(w0,w1):
-            print('i = ',i)
+            #print('i = ',i)
 
             angle_offset = pi/8.
             #s0 = np.ones(self.ns[i]).cumsum() * self.Ss[i]/(self.ns[i]-1.)
@@ -178,7 +178,7 @@ class semiSpheroid():
                 tri1[0,1,:] = self.peak
                 tri1[0,2,:] = self.row0[1]
                 self.vectors = np.append(self.vectors,tri1,axis=0)
-                print('Added peak tile...')
+                #print('Added peak tile...')
                 break
                  
             #s1 = np.ones(self.ns[i+1]).cumsum() * self.Ss[i+1]/(self.ns[i+1]-1.)
