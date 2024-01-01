@@ -553,8 +553,8 @@ class Morphology():
                             np.concatenate((Q21,Q22,Q23),axis=1),
                             np.concatenate((Q31,Q32,Q33),axis=1)),
                            axis=0)
-
-        
+        # clean up
+        del Q11, Q12, Q13, Q21, Q22, Q23, Q31, Q32, Q33
         #	Calculate its inverse...
         print('Calculating inverse...')
         #  Hence, F = Q_inv * U is the set of forces at singularity points P
@@ -706,6 +706,22 @@ class Morphology():
                                                           np.concatenate((self.layers[surface_layer].K_MV,
                                                                           self.layers[surface_layer].K_MW),axis=1))
                                                          ,axis=0)
+
+    def clear_big_arrays(self,clearQ=True,clearQ_inv=True,surface_layer=1):
+        """A method to clear big arrays, so that the saved object will be smaller
+        """
+        if clearQ:
+            try:
+                del self.layers[surface_layer].Q
+                print('Q deleted')
+            except:
+                print('Q not found')
+        if clearQ_inv:
+            try:
+                del self.layers[surface_layer].Q_inv
+                print('Q_inv deleted')
+            except:
+                print('Q_inv not found')
 
 
 #==============================================================================
