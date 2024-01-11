@@ -189,7 +189,7 @@ class Layer():
             interior/exterior tracking e.g. with the intersect_line_triangle
             code below.
 
-            For centered ellipsoids, use the temperary code below. 
+            For centered ellipsoids, use the temporary code below. 
             TODO:
             ref_point is a point guaranteed to be outside the layer. If not
             provided, it is assigned using the builtin max_ and min_ mesh

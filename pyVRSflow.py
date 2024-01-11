@@ -243,7 +243,8 @@ class VRSsim():
             self.axes2.cla()
             self.morph.plot_layers(axes=self.axes2,XE=self.XE)
             speed = sqrt((self.VEdot[0:3]**2).sum())
-            title_str2 = '{}\n{}'.format(n2s_fmt(self.XE[3:6]),n2s_fmt(speed))
+            title_str2 = 'Euler angles = {}\n       Speed = {}'.format(n2s_fmt(self.XE[3:6],fmt='4.2f'),n2s_fmt(speed))
+            #title_str2 = '{}\n{}'.format(n2s_fmt(self.XE[3:6]),n2s_fmt(speed))
             self.axes2.set_title(title_str2)
 
             self.figV.canvas.draw()
