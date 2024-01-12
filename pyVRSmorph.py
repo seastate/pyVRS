@@ -7,12 +7,21 @@ from mpl_toolkits import mplot3d
 from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 import numpy as np
-import math
+from math import pi
+#import math
 
 from attrdict import AttrDict
 
 from pyVRSutils import n2s_fmt
 from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
+
+#==============================================================================
+# Set up defaults for densities of named materials
+base_densities={'freshwater':1000.,
+                'seawater':1030.,
+                'tissue':1070.,
+                'lipid':900.,
+                'calcite':2669.}
 
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
@@ -756,3 +765,183 @@ class MorphologyND(Morphology):
         # ambient seawater) is always the 0th layer
         self.layers = [Medium(density=self.densities['seawater'],nu = 1)]
 
+#==============================================================================
+class MorphPars():
+    """ A class to faciliate specifications and calculations with parameter sets 
+        for early embryo morphologies. There are three distinct forms of these 
+        parameter sets:
+            1. dimensional geometrical & simulation parameters
+            2. nondimensional geometrical & simulation parameters
+            3. Shape and scaling parameters
+        Together, shape and scaling parameters define either dimensional or non-
+        dimensional geometrical & simulation parameters. Likewise, dimensional
+        geometrical & simulation parameters define a set of shape and scaling
+        parameters. Methods are provided to facilitate conversion of one form to
+        the others. 
+
+        Parameters are stored in AttrDict objects (enhanced dictionaries):
+            - geom_pars contains geometrical information, as required by meshSpheroid,
+              and additional information needed to calculate Morphology objects.
+            - sim_pars contains simulation parameters (shears, ciliary velocity, t_end)
+              as required by VRSsim
+            - ___ND versions are nondimensional versions of the above.
+            - shape_pars contains shape parameters (alpha, beta, eta, xi)
+            - scale_pars contains parameters (tissue volume, viscosity, density, etc.)
+              needed to reconstruct a dimensional scenario from the shape parameters
+
+        SI units are used throughout.
+    """
+    def __init__(self,densities={},densitiesND={},**kwargs):
+        """ Create AttrDict objects to contain parameters of different types:
+        """
+        print('Creating new MorphPars objects...')
+        # Create AttrDict objects for the dimensional and nondimensional scenarios
+        self.geom_pars = AttrDict()
+        self.sim_pars = AttrDict()
+        self.geom_parsND = AttrDict()
+        self.sim_parsND = AttrDict()
+        # shape_pars contains shape parameters 
+        self.shape_pars = AttrDict()
+        self.scale_pars = AttrDict()
+        
+    def new_sim_dim(self,dudz=0.,dvdz=0.,dwdx=0.,Tmax=10.,cil_speed=500e-6,
+                    phi=pi/3,theta=pi/4,psi=pi,pars={}):
+        """ A method to parameterize a dimensional embryo swimming simulation.
+
+            A default parameter set is provided, as a functional example. Alternative parameters
+            can be provided directly as arguments or as elements of the sim_pars dictionary argument.
+            The pars dictionary argument is considered to be the standard method, and in
+            case of duplication an entry in the pars dictionary supercedes the direct argument.
+        """
+        print('Creating or replacing geo_pars dictionary...')
+        new_pars = {'dudz':dudz,'dvdz':dvdz,'dwdx':dwdx,'Tmax':Tmax,
+                    'cil_speed':cil_speed,'phi':phi,'theta':theta,'psi':psi}
+        self.sim_pars.update(new_pars)
+        self.sim_pars.update(pars)
+        
+    def new_geom_dim(self,D_s=50e-6,L1_s=100e-6,L2_s=40e-6,D_i=30e-6,L1_i=50e-6,L2_i=20e-6,
+                     trans_i=[0,0,40e-6],d_s=6e-6,nlevels_s=[16,12],d_i=5e-6,nlevels_i=[12,8],
+                     pars={},calc=True,g=9.81,mu=1.17e-6 * 1030.,
+                     rho_med=base_densities['seawater'],
+                     rho_t=base_densities['tissue'],
+                     rho_i=base_densities['freshwater']):
+        """ A method to parameterize a dimensional embryo geometry.
+
+            A default parameter set is provided, as a functional example. Alternative parameters
+            can be provided directly as arguments or as elements of the geom_pars dictionary argument.
+            The pars dictionary argument is considered to be the standard method, and in
+            case of duplication an entry in the pars dictionary supercedes the direct argument.
+
+            g is the gravitational constant, provided as a way to use non-SI units (but don't).
+        """
+        print('Creating or replacing geo_pars dictionary...')
+        new_pars = {'D_s':D_s,'L1_s':L1_s,'L2_s':L2_s,'D_i':D_i,'L1_i':L1_i,'L2_i':L2_i,'trans_i':trans_i, \
+                    'd_s':d_s,'nlevels_s':nlevels_s,'d_i':d_i,'nlevels_i':nlevels_i, \
+                    'mu':mu,'rho_med':rho_med,'rho_t':rho_t,'rho_i':rho_i,'g':g}
+        self.geom_pars.update(new_pars)
+        self.geom_pars.update(pars)
+        
+        # If directed (and by default), calculate corresponding nondimensional parameters
+        if calc:
+            self.calc_geom_dim()
+
+    def calc_geom_dim(self):
+        """ A method to calculate the geometrical properties derived from the current dimensional
+            geom_pars parameter set.
+
+            This should be re-executed after each change of the basic geometrical parameters, to
+            update the derived geom_pars dictionary entries.
+        """
+        print('Calculating derived geometrical parameters from geom_pars...')
+        # make a shortcut
+        p = self.geom_pars
+        # Calculate total lengths
+        p.L0_s = p.L1_s + p.L2_s
+        p.L0_i = p.L1_i + p.L2_i
+        # Calculate volumes
+        p.V_s = pi/6 * p.L0_s * p.D_s**2
+        p.V_i = pi/6 * p.L0_i * p.D_i**2
+        p.V_t = p.V_s - p.V_i
+        # Calculate length and time scales
+        p.l = p.V_t**(1/3)
+        p.tau_rot = (36*pi)**(1/3) * p.mu / (p.rho_med * p.g * p.V_t**(1/3))
+        # save scales as attributes, because they are common to many calculations
+        self.l = p.l
+        self.tau_rot = p.tau_rot
+        # return the new AttrDict, in case it needs to be used directly
+        return self.geom_pars
+
+    def calc_geom2shape(self):
+        """ A method to calculate scale parameters from a set of dimensional geometry parameters.
+
+            In addition to the proper shape parameters (alpha, eta, beta, xi), the nondimensional
+            tissue and inclusion densities are calculated, because they are required for the flow
+            precalculations in Morphology methods.
+        """
+        print('Calculating shape_pars from geom_pars...')
+        # Create shortcuts
+        p = self.geom_pars
+        sh = self.shape_pars
+        # Calculate shape indices
+        sh.alpha_s = p.L0_s/p.D_s
+        sh.eta_s = p.L2_s/p.L0_s
+        sh.alpha_i = p.L0_i/p.D_i
+        sh.eta_i = p.L2_i/p.L0_i
+        sh.xi = p.trans_i[2]/p.L0_s
+        sh.beta = p.V_s/p.V_t
+        # Calculate nondimensional densities
+        sh.rho_t = p.rho_t/p.rho_med
+        sh.rho_i = p.rho_i/p.rho_med
+        # return the new AttrDict, in case it needs to be used directly
+        return self.shape_pars
+
+
+
+        
+    def calc_geom_nondim(self):
+        """ A method to calculate the nondimensional parameter set from 
+            a dimensional embryo swimming scenario.
+        """
+        # Calculate shape indices
+        p = self.geom_pars
+        p.L0_s = p.L1_s + p.L2_s
+        p.V_s = pi/6 * p.L0_s * p.D_s**2
+        p.alpha_s = p.L0_s/p.D_s
+        p.eta_s = p.L2_s/p.L0_s
+        p.L0_i = p.L1_i + p.L2_i
+        p.V_i = pi/6 * p.L0_i * p.D_i**2
+        p.alpha_i = p.L0_i/p.D_i
+        p.eta_i = p.L2_i/p.L0_i
+        p.xi = p.trans_i[2]/p.L0_s
+        p.V_t = p.V_s - p.V_i
+        p.beta = p.V_s/p.V_t
+        
+        p.l = p.V_t**(1/3)
+        #tau_rot = (36*pi)**(1/3) * mu
+        
+        new_pars = {'L0_s':p.L0_s,'V_s':p.V_s,'alpha_s':p.alpha_s,'L0_i':p.L0_i,'V_i':p.V_i,'alpha_i':p.alpha_i, \
+                    'eta_s':p.eta_s,'eta_i':p.eta_i,'xi':p.xi,'V_t':p.V_t,'beta':p.beta,'l':p.l}
+        self.pars.update(new_pars)
+
+
+'''
+
+        base_densities={'freshwater':1000.,
+                    'seawater':1030.,
+                    'tissue':1070.,
+                    'lipid':900.,
+                    'calcite':2669.}
+        # Update with passed parameters
+        self.densities=AttrDict(base_densities)
+        self.densities.update(densities)
+        # nondimensionalize densities by medium (seawater) density
+        reference_density = self.densities['seawater']
+        for mtrl,dens in self.densities.items():
+            self.densities.update({mtrl:dens/reference_density})
+        print('Updated densities: ',self.densities)
+        self.g = 1 # scaled to 1 in nondimensionalization
+        # Add an attribute to store Layers. The medium (typically
+        # ambient seawater) is always the 0th layer
+        self.layers = [Medium(density=self.densities['seawater'],nu = 1)]
+
+'''
