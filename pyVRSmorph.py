@@ -805,7 +805,7 @@ class MorphPars():
         self.scale_pars = AttrDict()
         
     def new_sim_dim(self,dudz=0.,dvdz=0.,dwdx=0.,Tmax=10.,cil_speed=500e-6,
-                    phi=pi/3,theta=pi/4,psi=pi,pars={}):
+                    phi=pi/3,theta=pi/4,psi=pi,x0=0,y0=0,z0=0,pars={}):
         """ A method to parameterize a dimensional embryo swimming simulation.
 
             A default parameter set is provided, as a functional example. Alternative parameters
@@ -815,29 +815,66 @@ class MorphPars():
         """
         print('Creating or replacing geo_pars dictionary...')
         new_pars = {'dudz':dudz,'dvdz':dvdz,'dwdx':dwdx,'Tmax':Tmax,
-                    'cil_speed':cil_speed,'phi':phi,'theta':theta,'psi':psi}
+                    'cil_speed':cil_speed,'phi':phi,'theta':theta,'psi':psi,
+                     'x0':x0,'y0':y0,'z0':z0}
         self.sim_pars.update(new_pars)
         self.sim_pars.update(pars)
+        return self.sim_pars
         
     def calc_sim_nondim(self,pars={}):
         """ A method to calculate nondimensional embryo swimming simulation parameters
             from the corresponding dimensional parameters in sim_pars, and characteristic
             length and time scales in geom_pars.
+
             The nondimensional parameters are stored in sim_parsND.
-
-            Parameters in the optional argument pars dictionary supercede values in 
-            sim_pars and 
-
-            A default parameter set is provided, as a functional example. Alternative parameters
-            can be provided directly as arguments or as elements of the sim_pars dictionary argument.
-            The pars dictionary argument is considered to be the standard method, and in
-            case of duplication an entry in the pars dictionary supercedes the direct argument.
         """
-        print('Creating or replacing geo_pars dictionary...')
-        new_pars = {'dudz':dudz,'dvdz':dvdz,'dwdx':dwdx,'Tmax':Tmax,
-                    'cil_speed':cil_speed,'phi':phi,'theta':theta,'psi':psi}
-        self.sim_pars.update(new_pars)
-        self.sim_pars.update(pars)
+        print('Creating or replacing the sim_parsND dictionary...')
+        self.sim_pars.update(pars)  # incorporate any updates
+        # Create a shortcut
+        sm = self.sim_pars
+        print('sm = ',sm)
+        p = self.geom_pars
+        smn = self.sim_parsND
+        #
+        smn.cil_speed = p.tau_rot/p.l * sm.cil_speed
+        smn.dudz = 1/(p.tau_rot*p.l) * sm.dudz
+        smn.dwdx = 1/(p.tau_rot*p.l) * sm.dwdx
+        smn.dvdz = 1/(p.tau_rot*p.l) * sm.dvdz
+        smn.Tmax = sm.Tmax/p.tau_rot
+        #
+        smn.theta = sm.theta
+        smn.phi = sm.phi
+        smn.psi = sm.psi
+        smn.x0 = sm.x0/p.l
+        smn.y0 = sm.y0/p.l
+        smn.z0 = sm.z0/p.l
+        
+    def calc_sim_dim(self,pars={}):
+        """ A method to calculate dimensional embryo swimming simulation parameters
+            from the corresponding nondimensional parameters in sim_pars, and characteristic
+            length and time scales in geom_pars.
+
+            The nondimensional parameters are stored in sim_parsND.
+        """
+        print('Creating or replacing the sim_pars dictionary...')
+        self.sim_pars.update(pars)  # incorporate any updates
+        # Create a shortcut
+        sm = self.sim_pars
+        p = self.geom_pars
+        smn = self.sim_parsND
+        #
+        sm.cil_speed = p.l/p.tau_rot * smn.cil_speed
+        sm.dudz = p.tau_rot*p.l * smn.dudz
+        sm.dwdx = p.tau_rot*p.l * smn.dwdx
+        sm.dvdz = p.tau_rot*p.l * smn.dvdz
+        sm.Tmax = p.tau_rot * smn.Tmax
+        #
+        sm.theta = smn.theta
+        sm.phi = smn.phi
+        sm.psi = smn.psi
+        sm.x0 = p.l * smn.x0
+        sm.y0 = p.l * smn.y0
+        sm.z0 = p.l * smn.z0
         
     def new_geom_dim(self,D_s=50e-6,L1_s=100e-6,L2_s=40e-6,D_i=30e-6,L1_i=50e-6,L2_i=20e-6,
                      h_i=40e-6,d_s=6e-6,nlevels_s=[16,12],d_i=5e-6,nlevels_i=[12,8],
@@ -905,6 +942,8 @@ class MorphPars():
         sc = self.scale_pars
         p = self.geom_pars
         # Calculate geometry from the shape and scale parameters
+        print(sc.g)
+        print(p)
         p.g = sc.g
         p.mu = sc.mu
         p.rho_med = sc.rho_med
@@ -913,11 +952,12 @@ class MorphPars():
         p.rho_i = sc.rho_med * sh.rho_i
         p.V_t = sc.V_t
         p.V_s = sh.beta * sc.V_t
+        p.V_i = (sh.beta-1) * sc.V_t
         p.l = p.V_t**(1/3)
         p.tau_rot = (36*pi)**(1/3) * p.mu / (p.rho_med * p.g * p.V_t**(1/3))
         #
         p.D_s = (6*sh.beta/(pi*sh.alpha_s))**(1/3) * p.l
-        p.D_i = (6*(1-sh.beta)/(pi*sh.alpha_i))**(1/3) * p.l
+        p.D_i = (6*(sh.beta-1)/(pi*sh.alpha_i))**(1/3) * p.l
         p.L0_s = sh.alpha_s * p.D_s
         p.L2_s = sh.eta_s * p.L0_s
         p.L1_s = (1-sh.eta_s) * p.L0_s
@@ -925,6 +965,11 @@ class MorphPars():
         p.L2_i = sh.eta_i * p.L0_i
         p.L1_i = (1-sh.eta_i) * p.L0_i
         p.h_i = sh.xi * p.L0_s
+        # Pass the tiling parameters
+        p.d_s = sh.d_s
+        p.nlevels_s = sh.nlevels_s
+        p.d_i = sh.d_i
+        p.nlevels_i = sh.nlevels_i
         # return the new AttrDict, in case it needs to be used directly
         return self.geom_pars
 
@@ -956,7 +1001,8 @@ class MorphPars():
 
             In addition to the proper shape parameters (alpha, eta, beta, xi), the nondimensional
             tissue and inclusion densities are calculated, because they are required for the flow
-            precalculations in Morphology methods.
+            precalculations in Morphology methods. Currently, the tiling parameters d_ and nlevels
+            are also carried with the shape parameters.
         """
         print('Calculating shape_pars from geom_pars...')
         # Create shortcuts
@@ -967,11 +1013,16 @@ class MorphPars():
         sh.eta_s = p.L2_s/p.L0_s
         sh.alpha_i = p.L0_i/p.D_i
         sh.eta_i = p.L2_i/p.L0_i
-        sh.xi = p.trans_i[2]/p.L0_s
+        sh.xi = p.h_i/p.L0_s
         sh.beta = p.V_s/p.V_t
         # Calculate nondimensional densities
         sh.rho_t = p.rho_t/p.rho_med
         sh.rho_i = p.rho_i/p.rho_med
+        # Store the tiling parameters, because they are needed for reconstructing geom_pars
+        sh.d_s = p.d_s
+        sh.nlevels_s = p.nlevels_s
+        sh.d_i = p.d_i
+        sh.nlevels_i = p.nlevels_i
         # return the new AttrDict, in case it needs to be used directly
         return self.shape_pars
 
