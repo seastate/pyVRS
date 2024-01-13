@@ -819,8 +819,28 @@ class MorphPars():
         self.sim_pars.update(new_pars)
         self.sim_pars.update(pars)
         
+    def calc_sim_nondim(self,pars={}):
+        """ A method to calculate nondimensional embryo swimming simulation parameters
+            from the corresponding dimensional parameters in sim_pars, and characteristic
+            length and time scales in geom_pars.
+            The nondimensional parameters are stored in sim_parsND.
+
+            Parameters in the optional argument pars dictionary supercede values in 
+            sim_pars and 
+
+            A default parameter set is provided, as a functional example. Alternative parameters
+            can be provided directly as arguments or as elements of the sim_pars dictionary argument.
+            The pars dictionary argument is considered to be the standard method, and in
+            case of duplication an entry in the pars dictionary supercedes the direct argument.
+        """
+        print('Creating or replacing geo_pars dictionary...')
+        new_pars = {'dudz':dudz,'dvdz':dvdz,'dwdx':dwdx,'Tmax':Tmax,
+                    'cil_speed':cil_speed,'phi':phi,'theta':theta,'psi':psi}
+        self.sim_pars.update(new_pars)
+        self.sim_pars.update(pars)
+        
     def new_geom_dim(self,D_s=50e-6,L1_s=100e-6,L2_s=40e-6,D_i=30e-6,L1_i=50e-6,L2_i=20e-6,
-                     trans_i=[0,0,40e-6],d_s=6e-6,nlevels_s=[16,12],d_i=5e-6,nlevels_i=[12,8],
+                     h_i=40e-6,d_s=6e-6,nlevels_s=[16,12],d_i=5e-6,nlevels_i=[12,8],
                      pars={},calc=True,g=9.81,mu=1.17e-6 * 1030.,
                      rho_med=base_densities['seawater'],
                      rho_t=base_densities['tissue'],
@@ -835,7 +855,7 @@ class MorphPars():
             g is the gravitational constant, provided as a way to use non-SI units (but don't).
         """
         print('Creating or replacing geo_pars dictionary...')
-        new_pars = {'D_s':D_s,'L1_s':L1_s,'L2_s':L2_s,'D_i':D_i,'L1_i':L1_i,'L2_i':L2_i,'trans_i':trans_i, \
+        new_pars = {'D_s':D_s,'L1_s':L1_s,'L2_s':L2_s,'D_i':D_i,'L1_i':L1_i,'L2_i':L2_i,'h_i':h_i, \
                     'd_s':d_s,'nlevels_s':nlevels_s,'d_i':d_i,'nlevels_i':nlevels_i, \
                     'mu':mu,'rho_med':rho_med,'rho_t':rho_t,'rho_i':rho_i,'g':g}
         self.geom_pars.update(new_pars)
@@ -871,8 +891,68 @@ class MorphPars():
         # return the new AttrDict, in case it needs to be used directly
         return self.geom_pars
 
-    def calc_geom2shape(self):
+    def new_shape2geom(self):
+        """ A method to calculate dimensional geometry parameters from the current shape
+            and scale parameters.
+
+            Shape parameters are stored in the shape_pars dictionary. Scale parameters
+            are stored in the scale_pars dictionary. The new geometrical parameters are
+            stored in the pars_geom dictionary.
+        """
+        print('Calculating geom_pars from shape_pars and scale_pars...')
+        # Create shortcuts
+        sh = self.shape_pars
+        sc = self.scale_pars
+        p = self.geom_pars
+        # Calculate geometry from the shape and scale parameters
+        p.g = sc.g
+        p.mu = sc.mu
+        p.rho_med = sc.rho_med
+        #
+        p.rho_t = sc.rho_med * sh.rho_t
+        p.rho_i = sc.rho_med * sh.rho_i
+        p.V_t = sc.V_t
+        p.V_s = sh.beta * sc.V_t
+        p.l = p.V_t**(1/3)
+        p.tau_rot = (36*pi)**(1/3) * p.mu / (p.rho_med * p.g * p.V_t**(1/3))
+        #
+        p.D_s = (6*sh.beta/(pi*sh.alpha_s))**(1/3) * p.l
+        p.D_i = (6*(1-sh.beta)/(pi*sh.alpha_i))**(1/3) * p.l
+        p.L0_s = sh.alpha_s * p.D_s
+        p.L2_s = sh.eta_s * p.L0_s
+        p.L1_s = (1-sh.eta_s) * p.L0_s
+        p.L0_i = sh.alpha_i * p.D_i
+        p.L2_i = sh.eta_i * p.L0_i
+        p.L1_i = (1-sh.eta_i) * p.L0_i
+        p.h_i = sh.xi * p.L0_s
+        # return the new AttrDict, in case it needs to be used directly
+        return self.geom_pars
+
+    def new_geom2scale(self,pars={}):
         """ A method to calculate scale parameters from a set of dimensional geometry parameters.
+            Scale parameters are stored in the scale_pars dictionary.
+
+            Together, the scale_pars and shape_pars dictionaries contain the information required
+            to reconstruct a dimensional embryo swimming scenario.
+
+            By default, parameters are taken from the geom_pars dictionary. The pars dictionary 
+            can be used to update or augment values in the scale_pars dictionary.
+        """
+        print('Calculating scale_pars from geom_pars...')
+        # Create shortcuts
+        p = self.geom_pars
+        sc = self.scale_pars
+        # Calculate shape indices
+        sc.V_t= p.V_t
+        sc.mu = p.mu
+        sc.rho_med = p.rho_med
+        sc.g = p.g
+        sc.update(pars)
+        # return the new AttrDict, in case it needs to be used directly
+        return self.scale_pars
+
+    def calc_geom2shape(self):
+        """ A method to calculate shape parameters from a set of dimensional geometry parameters.
 
             In addition to the proper shape parameters (alpha, eta, beta, xi), the nondimensional
             tissue and inclusion densities are calculated, because they are required for the flow
@@ -895,9 +975,6 @@ class MorphPars():
         # return the new AttrDict, in case it needs to be used directly
         return self.shape_pars
 
-
-
-        
     def calc_geom_nondim(self):
         """ A method to calculate the nondimensional parameter set from 
             a dimensional embryo swimming scenario.
