@@ -837,9 +837,9 @@ class MorphPars():
         smn = self.sim_parsND
         #
         smn.cil_speed = p.tau_rot/p.l * sm.cil_speed
-        smn.dudz = 1/(p.tau_rot*p.l) * sm.dudz
-        smn.dwdx = 1/(p.tau_rot*p.l) * sm.dwdx
-        smn.dvdz = 1/(p.tau_rot*p.l) * sm.dvdz
+        smn.dudz = p.tau_rot * sm.dudz
+        smn.dwdx = p.tau_rot * sm.dwdx
+        smn.dvdz = p.tau_rot * sm.dvdz
         smn.Tmax = sm.Tmax/p.tau_rot
         #
         smn.theta = sm.theta
@@ -851,7 +851,7 @@ class MorphPars():
         
     def calc_sim_dim(self,pars={}):
         """ A method to calculate dimensional embryo swimming simulation parameters
-            from the corresponding nondimensional parameters in sim_pars, and characteristic
+            from the corresponding nondimensional parameters in sim_parsND, and characteristic
             length and time scales in geom_pars.
 
             The nondimensional parameters are stored in sim_parsND.
@@ -864,9 +864,9 @@ class MorphPars():
         smn = self.sim_parsND
         #
         sm.cil_speed = p.l/p.tau_rot * smn.cil_speed
-        sm.dudz = p.tau_rot*p.l * smn.dudz
-        sm.dwdx = p.tau_rot*p.l * smn.dwdx
-        sm.dvdz = p.tau_rot*p.l * smn.dvdz
+        sm.dudz = 1/p.tau_rot * smn.dudz
+        sm.dwdx = 1/p.tau_rot * smn.dwdx
+        sm.dvdz = 1/p.tau_rot * smn.dvdz
         sm.Tmax = p.tau_rot * smn.Tmax
         #
         sm.theta = smn.theta
@@ -879,7 +879,7 @@ class MorphPars():
     def new_geom_dim(self,D_s=50e-6,L1_s=100e-6,L2_s=40e-6,D_i=30e-6,L1_i=50e-6,L2_i=20e-6,
                      h_i=40e-6,d_s=6e-6,nlevels_s=[16,12],d_i=5e-6,nlevels_i=[12,8],
                      pars={},calc=True,g=9.81,mu=1.17e-6 * 1030.,
-                     rho_med=base_densities['seawater'],
+                     rho_med=base_densities['seawater'],gamma=0.1,
                      rho_t=base_densities['tissue'],
                      rho_i=base_densities['freshwater']):
         """ A method to parameterize a dimensional embryo geometry.
@@ -894,7 +894,7 @@ class MorphPars():
         print('Creating or replacing geo_pars dictionary...')
         new_pars = {'D_s':D_s,'L1_s':L1_s,'L2_s':L2_s,'D_i':D_i,'L1_i':L1_i,'L2_i':L2_i,'h_i':h_i, \
                     'd_s':d_s,'nlevels_s':nlevels_s,'d_i':d_i,'nlevels_i':nlevels_i, \
-                    'mu':mu,'rho_med':rho_med,'rho_t':rho_t,'rho_i':rho_i,'g':g}
+                    'mu':mu,'rho_med':rho_med,'gamma':gamma,'rho_t':rho_t,'rho_i':rho_i,'g':g}
         self.geom_pars.update(new_pars)
         self.geom_pars.update(pars)
         
@@ -921,7 +921,7 @@ class MorphPars():
         p.V_t = p.V_s - p.V_i
         # Calculate length and time scales
         p.l = p.V_t**(1/3)
-        p.tau_rot = (36*pi)**(1/3) * p.mu / (p.rho_med * p.g * p.V_t**(1/3))
+        p.tau_rot = (36*pi)**(1/3) * p.mu / (p.gamma * p.rho_med * p.g * p.V_t**(1/3))
         # save scales as attributes, because they are common to many calculations
         self.l = p.l
         self.tau_rot = p.tau_rot
@@ -947,6 +947,7 @@ class MorphPars():
         p.g = sc.g
         p.mu = sc.mu
         p.rho_med = sc.rho_med
+        p.gamma = sc.gamma
         #
         p.rho_t = sc.rho_med * sh.rho_t
         p.rho_i = sc.rho_med * sh.rho_i
@@ -991,6 +992,7 @@ class MorphPars():
         sc.V_t= p.V_t
         sc.mu = p.mu
         sc.rho_med = p.rho_med
+        sc.gamma = p.gamma
         sc.g = p.g
         sc.update(pars)
         # return the new AttrDict, in case it needs to be used directly
@@ -1028,48 +1030,33 @@ class MorphPars():
 
     def calc_geom_nondim(self):
         """ A method to calculate the nondimensional parameter set from 
-            a dimensional embryo swimming scenario.
+            a dimensional embryo swimming scenario, as defined by the current 
+            parameter sets in the geom_pars, shape_pars and scale_pars dictionaries.
         """
         # Calculate shape indices
+        pn = self.geom_parsND
         p = self.geom_pars
-        p.L0_s = p.L1_s + p.L2_s
-        p.V_s = pi/6 * p.L0_s * p.D_s**2
-        p.alpha_s = p.L0_s/p.D_s
-        p.eta_s = p.L2_s/p.L0_s
-        p.L0_i = p.L1_i + p.L2_i
-        p.V_i = pi/6 * p.L0_i * p.D_i**2
-        p.alpha_i = p.L0_i/p.D_i
-        p.eta_i = p.L2_i/p.L0_i
-        p.xi = p.trans_i[2]/p.L0_s
-        p.V_t = p.V_s - p.V_i
-        p.beta = p.V_s/p.V_t
-        
-        p.l = p.V_t**(1/3)
-        #tau_rot = (36*pi)**(1/3) * mu
-        
-        new_pars = {'L0_s':p.L0_s,'V_s':p.V_s,'alpha_s':p.alpha_s,'L0_i':p.L0_i,'V_i':p.V_i,'alpha_i':p.alpha_i, \
-                    'eta_s':p.eta_s,'eta_i':p.eta_i,'xi':p.xi,'V_t':p.V_t,'beta':p.beta,'l':p.l}
-        self.pars.update(new_pars)
-
-
-'''
-
-        base_densities={'freshwater':1000.,
-                    'seawater':1030.,
-                    'tissue':1070.,
-                    'lipid':900.,
-                    'calcite':2669.}
-        # Update with passed parameters
-        self.densities=AttrDict(base_densities)
-        self.densities.update(densities)
-        # nondimensionalize densities by medium (seawater) density
-        reference_density = self.densities['seawater']
-        for mtrl,dens in self.densities.items():
-            self.densities.update({mtrl:dens/reference_density})
-        print('Updated densities: ',self.densities)
-        self.g = 1 # scaled to 1 in nondimensionalization
-        # Add an attribute to store Layers. The medium (typically
-        # ambient seawater) is always the 0th layer
-        self.layers = [Medium(density=self.densities['seawater'],nu = 1)]
-
-'''
+        sh = self.shape_pars
+        sc = self.scale_pars
+        #
+        pn.gamma = p.gamma
+        pn.rho_med = 1.
+        pn.rho_t = p.rho_t/p.rho_med
+        pn.rho_i = p.rho_i/p.rho_med
+        #
+        pn.V_t = 1.
+        pn.V_s = sh.beta
+        pn.V_i = 1 - sh.beta
+        #
+        pn.D_t = (6/pi)**(1/3)
+        pn.D_s = (6*sh.beta/pi)**(1/3)
+        pn.L0_s = sh.alpha_s * pn.D_s
+        pn.L2_s = sh.eta_s * pn.L0_s
+        pn.L1_s = (1-sh.eta_s) * pn.L0_s
+        pn.D_i = (6*(sh.beta-1)/pi)**(1/3)
+        pn.L0_i = sh.alpha_i * pn.D_i
+        pn.L2_i = sh.eta_i * pn.L0_i
+        pn.L1_i = (1-sh.eta_i) * pn.L0_i
+        pn.h_i = sh.xi * pn.L0_s
+        #
+        return pn
