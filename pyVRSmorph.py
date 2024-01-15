@@ -921,7 +921,7 @@ class MorphPars():
         p.V_t = p.V_s - p.V_i
         # Calculate length and time scales
         p.l = p.V_t**(1/3)
-        p.tau_rot = (36*pi)**(1/3) * p.mu / (p.gamma * p.rho_med * p.g * p.V_t**(1/3))
+        p.tau_rot = 64 * p.mu / (p.gamma * p.rho_med * p.g * p.V_t**(1/3))
         # save scales as attributes, because they are common to many calculations
         self.l = p.l
         self.tau_rot = p.tau_rot
@@ -955,7 +955,7 @@ class MorphPars():
         p.V_s = sh.beta * sc.V_t
         p.V_i = (sh.beta-1) * sc.V_t
         p.l = p.V_t**(1/3)
-        p.tau_rot = (36*pi)**(1/3) * p.mu / (p.rho_med * p.g * p.V_t**(1/3))
+        p.tau_rot = 64 * p.mu / (p.gamma*p.rho_med * p.g * p.V_t**(1/3))
         #
         p.D_s = (6*sh.beta/(pi*sh.alpha_s))**(1/3) * p.l
         p.D_i = (6*(sh.beta-1)/(pi*sh.alpha_i))**(1/3) * p.l
@@ -1046,8 +1046,10 @@ class MorphPars():
         #
         pn.V_t = 1.
         pn.V_s = sh.beta
-        pn.V_i = 1 - sh.beta
+        pn.V_i = sh.beta - 1
         #
+        pn.l = 1.
+        pn.tau_rot = 1.
         pn.D_t = (6/pi)**(1/3)
         pn.D_s = (6*sh.beta/pi)**(1/3)
         pn.L0_s = sh.alpha_s * pn.D_s
