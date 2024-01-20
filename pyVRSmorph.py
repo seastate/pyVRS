@@ -280,7 +280,7 @@ class Inclusion(Layer):
         of gravity and buoyancy centers and forces.
     """
     def __init__(self,stlfile=None,vectors=None,pars={},layer_type='inclusion',
-                 density=1070.,material='seawater',immersed_in=None,
+                 density=1030.,material='seawater',immersed_in=None,
                  check_normals=True,**kwargs):
         super().__init__(stlfile,vectors,pars,layer_type,material,density,immersed_in,
                          check_normals,**kwargs)
@@ -292,12 +292,12 @@ class Medium(Layer):
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
     def __init__(self,stlfile=None,vectors=None,pars={},layer_type='medium',
-                 density=1030.,material='seawater',nu = 1.17e-6,
+                 density=1030.,material='seawater',mu = 1030.*1.17e-6,
                  check_normals=False,**kwargs):
         super().__init__(stlfile,vectors,pars,layer_type,material,density,
                          check_normals,**kwargs)
-        mu = nu * density
-        self.pars.nu = nu
+        #mu = nu * density
+        #self.pars.nu = nu
         self.pars.mu = mu
         print('Created Medium object with parameters:\n{}'.format(self.pars))
 
@@ -312,11 +312,11 @@ class Morphology():
  
         """
         #super().__init__(**kwargs) # currently is not a derived class
-        base_densities={'freshwater':1000.,
-                    'seawater':1030.,
-                    'tissue':1070.,
-                    'lipid':900.,
-                    'calcite':2669.}
+        #base_densities={'freshwater':1000.,
+        #            'seawater':1030.,
+        #            'tissue':1070.,
+        #            'lipid':900.,
+        #            'calcite':2669.}
         # Update with passed parameters
         self.densities=AttrDict(base_densities)
         self.densities.update(densities)
@@ -489,7 +489,7 @@ class Morphology():
                     density_immersed_in = self.layers[immersed_in].pars['density']
                     density_diff = density - density_immersed_in
                     layer.pars.F_gravity -= self.g * density_diff * self.layers[i].pars['total_volume']
-                    layer.pars.C_gravity += self.g*density_diff*self.layers[i].pars['total_volume'] * \
+                    layer.pars.C_gravity += self.g * density_diff * self.layers[i].pars['total_volume'] * \
                                                                 self.layers[i].pars['volume_center']
                 layer.pars.C_gravity /= -layer.pars.F_gravity
                 print('F_gravity = ',layer.pars.F_gravity)
@@ -502,14 +502,14 @@ class Morphology():
                 msg = 'Unknown layer type in body_calcs in layer {}'.format(i)
                 raise ValueError(msg)
 
-    def flow_calcs(self,surface_layer=1):
+    def flow_calcs(self,surface_layer=1,clear_big_arrays=True):
         """A method to calculate force and moment distributions for hydrodynamic simulations.
            surface_layer is the index of the layer to be used as the ciliated surface.
         """
         # Extract properties of ambient fluid
         immersed_in = self.layers[surface_layer].pars['immersed_in']
         mu = self.layers[immersed_in].pars['mu']
-        nu = self.layers[immersed_in].pars['nu']
+        #nu = self.layers[immersed_in].pars['nu']
         density = self.layers[immersed_in].pars['density']
         
         # Construct influence matrix
@@ -716,6 +716,9 @@ class Morphology():
                                                                           self.layers[surface_layer].K_MW),axis=1))
                                                          ,axis=0)
 
+        if clear_big_arrays:
+            self.clear_big_arrays()
+        
     def clear_big_arrays(self,clearQ=True,clearQ_inv=True,surface_layer=1):
         """A method to clear big arrays, so that the saved object will be smaller
         """
@@ -742,28 +745,23 @@ class MorphologyND(Morphology):
         streamline conversion of dimensional scenarios to nondimensional ones, and vice
         versa.
     """
-    def __init__(self,densities={},g=9.81,**kwargs):
+    def __init__(self,densities={},gamma=1.,g=1.,**kwargs):
         """ Create a morphology instance, using an AttrDict object.
  
         """
         super().__init__(densities,g,**kwargs)
-        base_densities={'freshwater':1000.,
-                    'seawater':1030.,
-                    'tissue':1070.,
-                    'lipid':900.,
-                    'calcite':2669.}
-        # Update with passed parameters
-        self.densities=AttrDict(base_densities)
-        self.densities.update(densities)
+        #self.densities=AttrDict(base_densities)
         # nondimensionalize densities by medium (seawater) density
-        reference_density = self.densities['seawater']
+        reference_density = gamma*self.densities['seawater']
         for mtrl,dens in self.densities.items():
             self.densities.update({mtrl:dens/reference_density})
         print('Updated densities: ',self.densities)
-        self.g = 1 # scaled to 1 in nondimensionalization
+        print(f'before: g = {self.g}')
+        self.g = 1.                  # gravity is scaled to 1 in nondimensionalization
+        print(f'after: g = {self.g}')
         # Add an attribute to store Layers. The medium (typically
         # ambient seawater) is always the 0th layer
-        self.layers = [Medium(density=self.densities['seawater'],nu = 1)]
+        self.layers = [Medium(density=self.densities['seawater'],mu = 1)]
 
 #==============================================================================
 class MorphPars():
@@ -836,11 +834,11 @@ class MorphPars():
         p = self.geom_pars
         smn = self.sim_parsND
         #
-        smn.cil_speed = p.tau_rot/p.l * sm.cil_speed
-        smn.dudz = p.tau_rot * sm.dudz
-        smn.dwdx = p.tau_rot * sm.dwdx
-        smn.dvdz = p.tau_rot * sm.dvdz
-        smn.Tmax = sm.Tmax/p.tau_rot
+        smn.cil_speed = p.tau/p.l * sm.cil_speed
+        smn.dudz = p.tau * sm.dudz
+        smn.dwdx = p.tau * sm.dwdx
+        smn.dvdz = p.tau * sm.dvdz
+        smn.Tmax = sm.Tmax/p.tau
         #
         smn.theta = sm.theta
         smn.phi = sm.phi
@@ -863,11 +861,11 @@ class MorphPars():
         p = self.geom_pars
         smn = self.sim_parsND
         #
-        sm.cil_speed = p.l/p.tau_rot * smn.cil_speed
-        sm.dudz = 1/p.tau_rot * smn.dudz
-        sm.dwdx = 1/p.tau_rot * smn.dwdx
-        sm.dvdz = 1/p.tau_rot * smn.dvdz
-        sm.Tmax = p.tau_rot * smn.Tmax
+        sm.cil_speed = p.l/p.tau * smn.cil_speed
+        sm.dudz = 1/p.tau * smn.dudz
+        sm.dwdx = 1/p.tau * smn.dwdx
+        sm.dvdz = 1/p.tau * smn.dvdz
+        sm.Tmax = p.tau * smn.Tmax
         #
         sm.theta = smn.theta
         sm.phi = smn.phi
@@ -921,10 +919,10 @@ class MorphPars():
         p.V_t = p.V_s - p.V_i
         # Calculate length and time scales
         p.l = p.V_t**(1/3)
-        p.tau_rot = 64 * p.mu / (p.gamma * p.rho_med * p.g * p.V_t**(1/3))
-        # save scales as attributes, because they are common to many calculations
-        self.l = p.l
-        self.tau_rot = p.tau_rot
+        p.tau = p.mu / (p.gamma * p.rho_med * p.g * p.V_t**(1/3))
+        ## save scales as attributes, because they are common to many calculations
+        #self.l = p.l
+        #self.tau = p.tau
         # return the new AttrDict, in case it needs to be used directly
         return self.geom_pars
 
@@ -942,20 +940,20 @@ class MorphPars():
         sc = self.scale_pars
         p = self.geom_pars
         # Calculate geometry from the shape and scale parameters
-        print(sc.g)
-        print(p)
+        #print(sc.g)
+        #print(p)
         p.g = sc.g
         p.mu = sc.mu
         p.rho_med = sc.rho_med
         p.gamma = sc.gamma
         #
-        p.rho_t = sc.rho_med * sh.rho_t
-        p.rho_i = sc.rho_med * sh.rho_i
+        p.rho_t = sc.gamma*sc.rho_med * sh.rho_t
+        p.rho_i = sc.gamma*sc.rho_med * sh.rho_i
         p.V_t = sc.V_t
         p.V_s = sh.beta * sc.V_t
         p.V_i = (sh.beta-1) * sc.V_t
         p.l = p.V_t**(1/3)
-        p.tau_rot = 64 * p.mu / (p.gamma*p.rho_med * p.g * p.V_t**(1/3))
+        p.tau = p.mu / (p.gamma*p.rho_med * p.g * p.V_t**(1/3))
         #
         p.D_s = (6*sh.beta/(pi*sh.alpha_s))**(1/3) * p.l
         p.D_i = (6*(sh.beta-1)/(pi*sh.alpha_i))**(1/3) * p.l
@@ -967,9 +965,9 @@ class MorphPars():
         p.L1_i = (1-sh.eta_i) * p.L0_i
         p.h_i = sh.xi * p.L0_s
         # Pass the tiling parameters
-        p.d_s = sh.d_s
+        p.d_s = sh.d_s * p.l
         p.nlevels_s = sh.nlevels_s
-        p.d_i = sh.d_i
+        p.d_i = sh.d_i * p.l
         p.nlevels_i = sh.nlevels_i
         # return the new AttrDict, in case it needs to be used directly
         return self.geom_pars
@@ -1018,12 +1016,12 @@ class MorphPars():
         sh.xi = p.h_i/p.L0_s
         sh.beta = p.V_s/p.V_t
         # Calculate nondimensional densities
-        sh.rho_t = p.rho_t/p.rho_med
-        sh.rho_i = p.rho_i/p.rho_med
+        sh.rho_t = p.rho_t/(p.gamma*p.rho_med)
+        sh.rho_i = p.rho_i/(p.gamma*p.rho_med)
         # Store the tiling parameters, because they are needed for reconstructing geom_pars
-        sh.d_s = p.d_s
+        sh.d_s = p.d_s / p.l
         sh.nlevels_s = p.nlevels_s
-        sh.d_i = p.d_i
+        sh.d_i = p.d_i / p.l
         sh.nlevels_i = p.nlevels_i
         # return the new AttrDict, in case it needs to be used directly
         return self.shape_pars
@@ -1040,25 +1038,33 @@ class MorphPars():
         sc = self.scale_pars
         #
         pn.gamma = p.gamma
-        pn.rho_med = 1.
-        pn.rho_t = p.rho_t/p.rho_med
-        pn.rho_i = p.rho_i/p.rho_med
+        #pn.rho_med = 1.
+        pn.rho_med = 1./p.gamma
+        pn.rho_t = p.rho_t/(p.gamma*p.rho_med)
+        pn.rho_i = p.rho_i/(p.gamma*p.rho_med)
+        #pn.rho_t = p.rho_t/p.rho_med
+        #pn.rho_i = p.rho_i/p.rho_med
         #
         pn.V_t = 1.
         pn.V_s = sh.beta
         pn.V_i = sh.beta - 1
         #
         pn.l = 1.
-        pn.tau_rot = 1.
-        pn.D_t = (6/pi)**(1/3)
-        pn.D_s = (6*sh.beta/pi)**(1/3)
+        pn.tau = 1.
+        #pn.D_t = (6/(pi*sh.alpha_s))**(1/3)
+        pn.D_s = (6*sh.beta/(pi*sh.alpha_s))**(1/3)
         pn.L0_s = sh.alpha_s * pn.D_s
         pn.L2_s = sh.eta_s * pn.L0_s
         pn.L1_s = (1-sh.eta_s) * pn.L0_s
-        pn.D_i = (6*(sh.beta-1)/pi)**(1/3)
+        pn.D_i = (6*(sh.beta-1)/(pi*sh.alpha_i))**(1/3)
         pn.L0_i = sh.alpha_i * pn.D_i
         pn.L2_i = sh.eta_i * pn.L0_i
         pn.L1_i = (1-sh.eta_i) * pn.L0_i
         pn.h_i = sh.xi * pn.L0_s
+        # These are saved in shape_pars
+        pn.nlevels_s = sh.nlevels_s
+        pn.d_s = sh.d_s
+        pn.nlevels_i = sh.nlevels_i
+        pn.d_i = sh.d_i
         #
         return pn

@@ -193,7 +193,8 @@ class VRSsim():
                  S_fixed = np.asarray([0.,0.,0.,0.,0.,0.,0.,0.,0.]),
                  cil_speed = 0.,
                  Tmax=1,dt_plot=0.25,
-                 dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
+                 dt = 0.01,morph=None,surface_layer=1,flowfield=flowfield3):
+                 #dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
         self.tiny = 10**-6
         self.U_const_fixed = U_const_fixed.copy()
         self.S_fixed = S_fixed.copy()
@@ -210,14 +211,30 @@ class VRSsim():
         self.axes1.scatter(self.XE[0],self.XE[1],self.XE[2],c='red')
         if not resume:
             self.t_prev = -self.dt_plot
+        # Set up data storage
+        #self.data = AttrDict()
+        t0 = self.t_prev-self.dt_plot
+        self.time = [t0]                                        # A list for observation times
+        self.position = [self.XE.tolist()]                            # A list for positions
+        self.velocity = [self.Rotated_CoordsVRS(t0,self.XE).tolist()] # A list for absolute velocities
+        self.extflow = self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist()             # A list for ambient flow velocity
+        
         for istep in range(self.nsteps):
             self.t_prev += self.dt_plot
             t_next = min(self.t_prev+self.dt_plot,self.Tmax)
             XE_old = self.XE
             sol = solve_ivp(self.Rotated_CoordsVRS,[self.t_prev,t_next],self.XE,method='RK45',
-                            first_step=1e-4,max_step=1e-2)
+                            first_step=1e-4,max_step=dt)
+            #                first_step=1e-4,max_step=1e-2)
             self.XE = sol.y[:,-1]
             self.VEdot = self.Rotated_CoordsVRS(t_next,self.XE)
+            # Record data for metrics
+            self.time.append(t_next)
+            self.position.append(self.XE.tolist())
+            self.velocity.append(self.VEdot.tolist())
+            self.extflow.extend(self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist())
+            #self.extflow.append(self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist())
+            # Plotting output
             title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,n2s_fmt(self.XE[0:3]),n2s_fmt(self.VEdot[0:3]))
             self.axes1.set_title(title_str1)
             self.axes1.plot([XE_old[0],self.XE[0]],[XE_old[1],self.XE[1]],[XE_old[2],self.XE[2]],c='blue')
@@ -239,6 +256,9 @@ class VRSsim():
             except:
                 pass
             self.axes1.text2D(0.05, 0.95, scale_txt, transform=self.axes1.transAxes)
+            # setting equal axes makes some things easier to see and others harder
+            #self.axes1.set_aspect('equal', adjustable='box')
+            self.axes1.set_aspect('equalxy', adjustable='box')
             
             self.axes2.cla()
             self.morph.plot_layers(axes=self.axes2,XE=self.XE)
@@ -322,3 +342,4 @@ class VRSsim():
         VEdot = np.concatenate((self.VW[0:3].reshape([3,1]),np.asarray([dphi_dt,dtheta_dt,dpsi_dt]).reshape([3,1])),axis=0)
 
         return VEdot.reshape([6,])
+

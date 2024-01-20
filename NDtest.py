@@ -35,11 +35,7 @@ mp.new_geom_dim()      # create geom_pars dict
 
 mp.calc_geom_dim()     # calculate derived variables in geom_pars
 mp.new_sim_dim(pars={'phi':0,'Tmax':100,'dudz':-0.4,'dwdx':0.4})       # create sim_pars dict (can be modified without recalculation)
-
-#sav_geom_pars = {}
-#sav_geom_pars.update(mp.geom_pars)
-#sav_sim_pars = {}
-#sav_sim_pars.update(mp.sim_pars)
+#mp.new_sim_dim(pars={'phi':0,'Tmax':100,'dudz':-0.4,'dwdx':0.4})       # create sim_pars dict (can be modified without recalculation)
 
 mp.calc_geom2shape()   # create/calculate shape_pars dict from geom_pars
 mp.new_geom2scale()    # create scale_pars dict from geom_pars
@@ -48,10 +44,7 @@ mp.calc_geom_nondim()   # calculate new geom_parsND from geom and shape paramete
 #sav_dim_scale = mp.scale_pars
 mp.calc_sim_nondim()   # create new sim_parsND from simulation and scale parameters
 
-# Set scaling parameters to reflect the nondimensional case
-#mp.scale_pars.update({'V_t':1,'mu':1,'rho_med':1,'g':1})
-#sav_nondim_scale = mp.scale_pars
-
+# As a test, reconstitute dimensional morphology parameters
 mp.geom_pars=AttrDict()  # erase old values
 mp.new_shape2geom()    # create new geom_pars from shape and scale parameters
 mp.calc_sim_dim()    # create new geom_pars from shape and scale parameters
@@ -73,7 +66,7 @@ for key in all_keys:
 
 # mu = ndt.mp.scale_pars.mu
 # l = ndt.mp.geom_pars.l
-# tau = ndt.mp.geom_pars.tau_rot
+# tau = ndt.mp.geom_pars.tau
 # key='L0_i';[ndt.mp.geom_parsND[key]*l,ndt.mp.geom_pars[key]]
 '''
 #===============================================================
@@ -105,6 +98,7 @@ M.gen_surface(vectors=CEsurf.vectors)
 M.gen_inclusion(vectors=CEincl.vectors,material='freshwater',immersed_in=1)
 
 '''
+# Plot the dimensional morphology
 figureM = pyplot.figure(num=57)
 axesM = figureM.add_subplot(projection='3d')
 M.plot_layers(axes=axesM)
@@ -126,6 +120,7 @@ MND.gen_surface(vectors=CEsurfND.vectors)
 MND.gen_inclusion(vectors=CEinclND.vectors,material='freshwater',immersed_in=1)
 
 '''
+# Plot the nondimensional morphology
 figureMND = pyplot.figure(num=67)
 axesMND = figureMND.add_subplot(projection='3d')
 MND.plot_layers(axes=axesMND)
@@ -203,14 +198,63 @@ sim_parsND=SimPars(dudz=sparsND.dudz,dvdz=sparsND.dvdz,dwdx=sparsND.dwdx,
 SimND = flw.VRSsim(morph=MND,fignum=68)
 #SimND.run(XEinit=sim_parsND.XEinit,Tmax=4400,cil_speed=0*sim_parsND.cil_speed,
 #          U_const_fixed=sim_parsND.U_const_fixed,S_fixed=sim_parsND.S_fixed,dt=1.,dt_plot=25.)
-#SimND.run(XEinit=sim_parsND.XEinit,Tmax=sim_pars.Tmax,cil_speed=1*sim_parsND.cil_speed,vel_scale=1/gpars.tau_rot,
+#SimND.run(XEinit=sim_parsND.XEinit,Tmax=sim_pars.Tmax,cil_speed=1*sim_parsND.cil_speed,vel_scale=1/gpars.tau,
 #          U_const_fixed=sim_parsND.U_const_fixed,S_fixed=sim_parsND.S_fixed)
 SimND.run(XEinit=sim_parsND.XEinit,Tmax=sim_parsND.Tmax,cil_speed=1*sim_parsND.cil_speed,
-          U_const_fixed=sim_parsND.U_const_fixed,S_fixed=sim_parsND.S_fixed,dt=0.1,dt_plot=25.)
+          U_const_fixed=sim_parsND.U_const_fixed,S_fixed=sim_parsND.S_fixed,dt=1.,dt_plot=25.)
 
 
 
 
+time = np.asarray(Sim.time)
+velocity = np.asarray(Sim.velocity)
+position = np.asarray(Sim.position)
+extflow = np.asarray(Sim.extflow)
+
+timeND = np.asarray(SimND.time)
+velocityND = np.asarray(SimND.velocity)
+positionND = np.asarray(SimND.position)
+extflowND = np.asarray(SimND.extflow)
+
+rel_vel = velocity[:,0:3]-extflow
+rel_velND = velocityND[:,0:3]-extflowND
+
+figureS = pyplot.figure(num=5)
+pyplot.subplot(311)
+#axesS1 = figureS.add_subplot()
+pyplot.plot(time,velocity[:,2],label='abs_vel')
+pyplot.plot(time,rel_vel[:,2],label='rel_vel')
+pyplot.plot(time,extflow[:,2],label='extflow')
+pyplot.legend()
+
+pyplot.subplot(312)
+tau = mp.geom_pars.tau
+l = mp.geom_pars.l
+
+#axesS1 = figureS.add_subplot()
+pyplot.plot(time,velocity[:,2],label='abs_vel')
+pyplot.plot(time,rel_vel[:,2],label='rel_vel')
+pyplot.plot(time,extflow[:,2],label='extflow')
+pyplot.plot(timeND*tau,l/tau*velocityND[:,2],label='abs_velND')
+pyplot.plot(timeND*tau,l/tau*rel_velND[:,2],label='rel_velND')
+pyplot.plot(timeND*tau,l/tau*extflowND[:,2],label='extflowND')
+#pyplot.plot(time/tau,tau/l*velocity[:,2],label='abs_vel')
+#pyplot.plot(time/tau,tau/l*rel_vel[:,2],label='rel_vel')
+#pyplot.plot(time/tau,tau/l*extflow[:,2],label='extflow')
+#pyplot.plot(timeND,velocityND[:,2],label='abs_velND')
+#pyplot.plot(timeND,rel_velND[:,2],label='rel_velND')
+#pyplot.plot(timeND,extflowND[:,2],label='extflowND')
+pyplot.legend()
+
+
+pyplot.subplot(313)
+#axesS1 = figureS.add_subplot()
+pyplot.plot(timeND,velocityND[:,2],label='abs_velND')
+pyplot.plot(timeND,rel_velND[:,2],label='rel_velND')
+pyplot.plot(timeND,extflowND[:,2],label='extflowND')
+pyplot.legend()
+
+"""
 #===============================================================
 # Try a rescaled version
 
@@ -284,6 +328,7 @@ Sim2.run(XEinit=sim_pars2.XEinit,Tmax=1*sim_pars2.Tmax,cil_speed=1*sim_pars2.cil
 
 
 
+"""
 
 
 
