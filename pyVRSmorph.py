@@ -14,6 +14,10 @@ from attrdict import AttrDict
 
 from pyVRSutils import n2s_fmt
 from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
+from meshSpheroid import chimeraSpheroid
+import pickle
+from copy import deepcopy
+import os
 
 #==============================================================================
 # Set up defaults for densities of named materials
@@ -765,6 +769,27 @@ class MorphologyND(Morphology):
         self.layers = [Medium(density=self.densities['seawater'],mu = 1)]
 
 #==============================================================================
+class SimPars():
+    """
+    A simple class to facilitate acquiring and passing VRS simulation
+    parameters with interactive_output widgets.
+    """
+    def __init__(self,dudz=0.,dvdz=0.,dwdx=0.,U0=0.,U1=0.,U2=0.,
+                 Tmax=20.,cil_speed=0.5*1000*1e-6,
+                 phi=pi/3.,theta=-pi/4.,psi=pi):
+        self.dudz = dudz
+        self.dvdz = dvdz
+        self.dwdx = dwdx
+        self.U0 = U0
+        self.U1 = U1
+        self.U2 = U2
+        self.Tmax = Tmax
+        self.cil_speed = cil_speed
+        self.S_fixed = np.asarray([0.,0.,dudz,0.,0.,dvdz,dwdx,0.,0.])
+        self.U_const_fixed = np.asarray([U0,U1,U2])
+        self.XEinit = np.asarray([0.,0.,0.,phi,theta,psi])
+
+#==============================================================================
 class MorphPars():
     """ A class to faciliate specifications and calculations with parameter sets 
         for early embryo morphologies. There are three distinct forms of these 
@@ -802,6 +827,102 @@ class MorphPars():
         # shape_pars contains shape parameters 
         self.shape_pars = AttrDict()
         self.scale_pars = AttrDict()
+        
+    def gen_morphND(self,plotMorph=True,body_calcs=True,flow_calcs=True):
+        """ A method to facilitate generating a MorphologyND object from the current 
+            shape parameters.
+        """
+        print('Creating a MorphologyND object from shape_pars...')
+        self.calc_geom_nondim() # create/update geom_parsND from shape_pars
+        # make a shortcut
+        gmND = self.geom_parsND
+        # set up the nondimensional morphology
+        CEsurfND = chimeraSpheroid(D=gmND.D_s,L1=gmND.L1_s,L2=gmND.L2_s,d=gmND.d_s,nlevels=gmND.nlevels_s)
+        CEinclND = chimeraSpheroid(D=gmND.D_i,L1=gmND.L1_i,L2=gmND.L2_i,d=gmND.d_i,nlevels=gmND.nlevels_i,
+                         translate=[0,0,gmND.h_i])
+        
+        # Create metadata dictionary
+        mdata = {'shape_pars':self.shape_pars}
+        #mdata = {'geom_parsND':mp.geom_parsND,'shape_pars':mp.shape_pars}
+        self.MND = MorphologyND(gamma=gmND.gamma,metadata=mdata)
+        self.MND.check_normals = False
+        self.MND.gen_surface(vectors=CEsurfND.vectors)
+        # materials parameter can be 'seawater', 'tissue', 'lipid' or 'calcite' 
+        self.MND.gen_inclusion(vectors=CEinclND.vectors,material='freshwater',immersed_in=1)
+        if plotMorph:
+            # Plot the nondimensional morphology
+            figureMND = plt.figure(num=67)
+            axesMND = figureMND.add_subplot(projection='3d')
+            self.MND.plot_layers(axes=axesMND)
+            
+            figureMND.canvas.draw()
+            figureMND.canvas.flush_events()
+            plt.pause(0.25)
+        if body_calcs:  # if requested, calculate buoyancy & gravity forces
+            self.MND.body_calcs()
+        if flow_calcs:  # if requested, calculate flow around the surface
+            self.MND.flow_calcs(surface_layer=1)
+        #
+        return self.MND
+
+    def save_morphND(self,prefix='morph',path='MorphFiles',suffix='mrph',pars='baer'):
+        """
+        A function to facilitate saving the current nondimensional swimming embryo 
+        morphology with an informative name. The parameter pars determines which 
+        parameters will be included in the filename: a = alpha, b = beta, e=eta, r = rho
+        (assumed to be for the surface layer).
+        
+        Values for those parameters are taken from the current shape_pars dictionary.
+        This method should be run after gen_morphND, before shape parameters are
+        changed, to insure the saved metadata is correct.
+        """
+        # make a shortcut
+        sh = self.shape_pars
+        # Construct filename and path
+        filename = prefix
+        for c in pars:
+            if c=='a':
+                filename += '_a'+str(sh.alpha_s)
+            if c=='b':
+                filename += '_b'+str(sh.beta)
+            if c=='e':
+                filename += '_e'+str(sh.eta_s)
+            if c=='r':
+                filename += '_r'+str(sh.rho_t)
+        # complete the filename with the suffix
+        filename += '.' + suffix
+        fullpath = os.path.join(path,filename)
+        with open(fullpath, 'wb') as handle:
+            #print(f'Saving morphology as {fc_s.selected}')
+            pickle.dump(self.MND, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            print(f'Saved morphology as {fullpath}')
+        #
+        return fullpath
+
+    def load_morphND(self,fullpath=None,filename=None,path=None,load_meta=True,plotMorph=True):
+        if fullpath == None:
+            fullpath = os.path.join(path,filename)
+        #
+        with open(fullpath, 'rb') as handle:
+            self.MND = pickle.load(handle)
+            print(f'Loaded morphology file {fullpath}')
+        if load_meta:
+            try:
+                self.shape_pars = self.MND.metadata['shape_pars']
+                print('Loaded shape_pars from metadata...')
+                if plotMorph:
+                    # Plot the nondimensional morphology
+                    figureMND = plt.figure(num=47)
+                    axesMND = figureMND.add_subplot(projection='3d')
+                    self.MND.plot_layers(axes=axesMND)
+
+                    figureMND.canvas.draw()
+                    figureMND.canvas.flush_events()
+                    plt.pause(0.25)
+            except:
+                self.shape_pars = {}
+                print('>>>>>>>Failed to Load shape_pars from metadata<<<<<<<<<')
+
         
     def new_sim_dim(self,dudz=0.,dvdz=0.,dwdx=0.,Tmax=10.,cil_speed=500e-6,
                     phi=pi/3,theta=pi/4,psi=pi,x0=0,y0=0,z0=0,pars={}):
@@ -946,10 +1067,14 @@ class MorphPars():
         p.g = sc.g
         p.mu = sc.mu
         p.rho_med = sc.rho_med
-        p.gamma = sc.gamma
-        #
-        p.rho_t = sc.gamma*sc.rho_med * sh.rho_t
-        p.rho_i = sc.gamma*sc.rho_med * sh.rho_i
+        # Try moving gamma to shape dictionary (so it is stored in ND metadata)
+        p.gamma = sh.gamma
+        #p.gamma = sc.gamma
+        # Try moving gamma to the shape dictionary
+        p.rho_t = p.gamma*sc.rho_med * sh.rho_t
+        p.rho_i = p.gamma*sc.rho_med * sh.rho_i
+        #p.rho_t = sc.gamma*sc.rho_med * sh.rho_t
+        #p.rho_i = sc.gamma*sc.rho_med * sh.rho_i
         p.V_t = sc.V_t
         p.V_s = sh.beta * sc.V_t
         p.V_i = (sh.beta-1) * sc.V_t
@@ -1019,6 +1144,8 @@ class MorphPars():
         # Calculate nondimensional densities
         sh.rho_t = p.rho_t/(p.gamma*p.rho_med)
         sh.rho_i = p.rho_i/(p.gamma*p.rho_med)
+        # Anticipate moving gamma to the shape dictionary
+        sh.gamma = p.gamma
         # Store the tiling parameters, because they are needed for reconstructing geom_pars
         sh.d_s = p.d_s / p.l
         sh.nlevels_s = p.nlevels_s
@@ -1038,11 +1165,13 @@ class MorphPars():
         sh = self.shape_pars
         sc = self.scale_pars
         #
-        pn.gamma = p.gamma
+        pn.gamma = sh.gamma
         #pn.rho_med = 1.
-        pn.rho_med = 1./p.gamma
-        pn.rho_t = p.rho_t/(p.gamma*p.rho_med)
-        pn.rho_i = p.rho_i/(p.gamma*p.rho_med)
+        pn.rho_med = 1./sh.gamma
+        pn.rho_t = sh.rho_t
+        pn.rho_i = sh.rho_i
+        #pn.rho_t = p.rho_t/(p.gamma*p.rho_med)
+        #pn.rho_i = p.rho_i/(p.gamma*p.rho_med)
         #pn.rho_t = p.rho_t/p.rho_med
         #pn.rho_i = p.rho_i/p.rho_med
         #
