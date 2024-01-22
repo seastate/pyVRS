@@ -745,12 +745,13 @@ class MorphologyND(Morphology):
         streamline conversion of dimensional scenarios to nondimensional ones, and vice
         versa.
     """
-    def __init__(self,densities={},gamma=1.,g=1.,**kwargs):
+    def __init__(self,densities={},gamma=1.,g=1.,metadata={},**kwargs):
         """ Create a morphology instance, using an AttrDict object.
  
         """
         super().__init__(densities,g,**kwargs)
-        #self.densities=AttrDict(base_densities)
+        # Save metadata, if any
+        self.metadata = metadata
         # nondimensionalize densities by medium (seawater) density
         reference_density = gamma*self.densities['seawater']
         for mtrl,dens in self.densities.items():
