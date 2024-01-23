@@ -836,19 +836,21 @@ class MorphPars():
         self.calc_geom_nondim() # create/update geom_parsND from shape_pars
         # make a shortcut
         gmND = self.geom_parsND
-        # set up the nondimensional morphology
-        CEsurfND = chimeraSpheroid(D=gmND.D_s,L1=gmND.L1_s,L2=gmND.L2_s,d=gmND.d_s,nlevels=gmND.nlevels_s)
-        CEinclND = chimeraSpheroid(D=gmND.D_i,L1=gmND.L1_i,L2=gmND.L2_i,d=gmND.d_i,nlevels=gmND.nlevels_i,
-                         translate=[0,0,gmND.h_i])
-        
         # Create metadata dictionary
         mdata = {'shape_pars':self.shape_pars}
         #mdata = {'geom_parsND':mp.geom_parsND,'shape_pars':mp.shape_pars}
         self.MND = MorphologyND(gamma=gmND.gamma,metadata=mdata)
         self.MND.check_normals = False
-        self.MND.gen_surface(vectors=CEsurfND.vectors)
-        # materials parameter can be 'seawater', 'tissue', 'lipid' or 'calcite' 
-        self.MND.gen_inclusion(vectors=CEinclND.vectors,material='freshwater',immersed_in=1)
+        # set up the nondimensional surface morphology
+        self.CEsurfND = chimeraSpheroid(D=gmND.D_s,L1=gmND.L1_s,L2=gmND.L2_s,d=gmND.d_s,nlevels=gmND.nlevels_s)
+        self.MND.gen_surface(vectors=self.CEsurfND.vectors)
+        # test if there is an inclusion
+        if self.shape_pars.beta > 1:  
+            # set up the nondimensional inclusion morphology
+            self.CEinclND = chimeraSpheroid(D=gmND.D_i,L1=gmND.L1_i,L2=gmND.L2_i,d=gmND.d_i,nlevels=gmND.nlevels_i,
+                             translate=[0,0,gmND.h_i])
+            # materials parameter can be 'seawater', 'tissue', 'lipid' or 'calcite'
+            self.MND.gen_inclusion(vectors=self.CEinclND.vectors,material='freshwater',immersed_in=1)
         if plotMorph:
             # Plot the nondimensional morphology
             figureMND = plt.figure(num=67)
@@ -882,13 +884,13 @@ class MorphPars():
         filename = prefix
         for c in pars:
             if c=='a':
-                filename += '_a'+str(sh.alpha_s)
+                filename += '_a'+str(round(sh.alpha_s,3))
             if c=='b':
-                filename += '_b'+str(sh.beta)
+                filename += '_b'+str(round(sh.beta,3))
             if c=='e':
-                filename += '_e'+str(sh.eta_s)
+                filename += '_e'+str(round(sh.eta_s,3))
             if c=='r':
-                filename += '_r'+str(sh.rho_t)
+                filename += '_r'+str(round(sh.rho_t,3))
         # complete the filename with the suffix
         filename += '.' + suffix
         fullpath = os.path.join(path,filename)

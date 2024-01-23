@@ -49,6 +49,7 @@ mp.calc_sim_dim()    # create new geom_pars from shape and scale parameters
 '''
 #===============================================================
 # Create shortcuts
+'''
 mp.shape_pars =  AttrDict({'alpha_s': 2.8000000000000003, 'eta_s': 0.2857142857142857, 'alpha_i': 2.3333333333333335, 'eta_i': 0.2857142857142857, 'xi': 0.2857142857142857, 'beta': 1.2195121951219512, 'rho_t': 10.388349514563107, 'rho_i': 9.70873786407767, 'gamma': 0.1, 'd_s': 0.11285593694928399, 'nlevels_s': (16, 12), 'd_i': 0.09404661412440334, 'nlevels_i': (12, 8)})
 sh_pars = mp.shape_pars
 print('shape_pars = ',sh_pars)
@@ -58,6 +59,60 @@ fpath = mp.save_morphND()
 
 mp2 = MorphPars()
 mp2.load_morphND(fullpath=fpath)
+'''
+set_break = False
+
+alpha_set = np.linspace(1,3.5,6)
+beta_set = np.linspace(1,3,5)
+eta_set = np.linspace(0.25,0.75,5)
+
+simnum = alpha_set.size * beta_set.size * eta_set.size
+simcount = 0
+
+sigma = 0.9
+
+for alpha in alpha_set:
+    if set_break:
+        break
+    for beta in beta_set:
+        if set_break:
+            break
+        for eta in eta_set:
+            if set_break:
+                break
+            simcount += 1
+            print(f'\n\n********** Calculating morphology {simcount}/{simnum} ************\n\n')
+            mp = MorphPars()
+            xi = (1-eta)*(sigma - ((beta-1)/beta)**(1/3))
+            mp.shape_pars = AttrDict({'alpha_s': alpha, 'eta_s': eta, 'alpha_i': alpha, 'eta_i': eta,
+                                      'xi': xi, 'beta': beta, 'gamma': 0.1,
+                                      'rho_t': 10.388349514563107, 'rho_i': 9.70873786407767,
+                                      'd_s': 0.11285593694928399, 'nlevels_s': (16, 16),
+                                      'd_i': 0.09404661412440334, 'nlevels_i': (12, 12)})
+            #mp.shape_pars = AttrDict({'alpha_s': alpha, 'eta_s': eta, 'alpha_i': alpha, 'eta_i': eta,
+            #                          'xi': xi, 'beta': beta, 'gamma': 0.1,
+            #                          'rho_t': 10.388349514563107, 'rho_i': 9.70873786407767,
+            #                          'd_s': 0.11285593694928399, 'nlevels_s': (16, 12),
+            #                          'd_i': 0.09404661412440334, 'nlevels_i': (12, 8)})
+            mp.gen_morphND()
+            fpath = mp.save_morphND()
+            
+            #if simcount == 1:
+            #    set_break = True
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
 
 '''
 sim_parsND=SimPars(dudz=sparsND.dudz,dvdz=sparsND.dvdz,dwdx=sparsND.dwdx,
