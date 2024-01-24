@@ -315,12 +315,6 @@ class Morphology():
         """ Create a morphology instance, using an AttrDict object.
  
         """
-        #super().__init__(**kwargs) # currently is not a derived class
-        #base_densities={'freshwater':1000.,
-        #            'seawater':1030.,
-        #            'tissue':1070.,
-        #            'lipid':900.,
-        #            'calcite':2669.}
         # Update with passed parameters
         self.densities=AttrDict(base_densities)
         self.densities.update(densities)
@@ -702,22 +696,28 @@ class Morphology():
 
         self.layers[surface_layer].K_FV = np.concatenate((self.layers[surface_layer].F_total_trans1.T,
                                                           self.layers[surface_layer].F_total_trans2.T,
-                                                          self.layers[surface_layer].F_total_trans3.T),axis=1)
+                                                          self.layers[surface_layer].F_total_trans3.T),
+                                                         axis=1)
         self.layers[surface_layer].K_MV = np.concatenate((self.layers[surface_layer].M_total_trans1.T,
                                                           self.layers[surface_layer].M_total_trans2.T,
-                                                          self.layers[surface_layer].M_total_trans3.T),axis=1)
+                                                          self.layers[surface_layer].M_total_trans3.T),
+                                                         axis=1)
         
         self.layers[surface_layer].K_FW = np.concatenate((self.layers[surface_layer].F_total_rot1.T,
                                                           self.layers[surface_layer].F_total_rot2.T,
-                                                          self.layers[surface_layer].F_total_rot3.T),axis=1)
+                                                          self.layers[surface_layer].F_total_rot3.T),
+                                                         axis=1)
         self.layers[surface_layer].K_MW = np.concatenate((self.layers[surface_layer].M_total_rot1.T,
                                                           self.layers[surface_layer].M_total_rot2.T,
-                                                          self.layers[surface_layer].M_total_rot3.T),axis=1)
+                                                          self.layers[surface_layer].M_total_rot3.T),
+                                                         axis=1)
 
         self.layers[surface_layer].K_VW = np.concatenate((np.concatenate((self.layers[surface_layer].K_FV,
-                                                                          self.layers[surface_layer].K_FW),axis=1),
+                                                                          self.layers[surface_layer].K_FW),
+                                                                         axis=1),
                                                           np.concatenate((self.layers[surface_layer].K_MV,
-                                                                          self.layers[surface_layer].K_MW),axis=1))
+                                                                          self.layers[surface_layer].K_MW),
+                                                                         axis=1))
                                                          ,axis=0)
 
         if clear_big_arrays:
