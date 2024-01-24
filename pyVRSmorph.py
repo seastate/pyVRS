@@ -13,7 +13,7 @@ from math import pi
 from attrdict import AttrDict
 
 from pyVRSutils import n2s_fmt
-from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler
+from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler, VRSsim
 from meshSpheroid import chimeraSpheroid
 import pickle
 from copy import deepcopy
@@ -776,7 +776,9 @@ class SimPars():
     """
     def __init__(self,dudz=0.,dvdz=0.,dwdx=0.,U0=0.,U1=0.,U2=0.,
                  Tmax=20.,cil_speed=0.5*1000*1e-6,
-                 phi=pi/3.,theta=-pi/4.,psi=pi):
+                 phi=pi/3.,theta=-pi/4.,psi=pi,
+                 x0=0.,y0=0.,z0=0.,
+                 dt=0.01,dt_stat=0.25):
         self.dudz = dudz
         self.dvdz = dvdz
         self.dwdx = dwdx
@@ -787,7 +789,9 @@ class SimPars():
         self.cil_speed = cil_speed
         self.S_fixed = np.asarray([0.,0.,dudz,0.,0.,dvdz,dwdx,0.,0.])
         self.U_const_fixed = np.asarray([U0,U1,U2])
-        self.XEinit = np.asarray([0.,0.,0.,phi,theta,psi])
+        self.XEinit = np.asarray([x0,y0,z0,phi,theta,psi])
+        self.dt = dt
+        self.dt_stat = dt_stat
 
 #==============================================================================
 class MorphPars():
@@ -828,6 +832,43 @@ class MorphPars():
         self.shape_pars = AttrDict()
         self.scale_pars = AttrDict()
         
+    def gen_simND(self,run=True,plotSim='all',fignum=68):
+        """ A method to facilitate generating a VRSsim object from the current 
+            nondimensional simulation parameters. If run=True, the simulation
+            is automatically run after it is defined.
+
+            The current MND morphology is used, and must be defined before the
+            simulation object is created.
+        """
+        print('Creating a SimND object from shape_pars...')
+        #self.calc_geom_nondim() # create/update geom_parsND from shape_pars
+
+        self.SimND = VRSsim(morph=self.MND,fignum=fignum)
+
+        # If requested, run the simulation
+        if run:
+            self.run_simND(plotSim=plotSim)
+        
+    def run_simND(self,plotSim='all',sim_parsND={}):
+        """ A method to facilitate running a VRSsim object from the current nondimensional
+            simulation parameters.
+        """
+        # Update with new parameters, if any
+        self.sim_parsND.update(sim_parsND)
+        # Create a shortcut
+        sparsND = self.sim_parsND
+        Sim_ParsND=SimPars(dudz=sparsND.dudz,dvdz=sparsND.dvdz,dwdx=sparsND.dwdx,
+                           Tmax=sparsND.Tmax,cil_speed=sparsND.cil_speed,
+                           phi=sparsND.phi,theta=sparsND.theta,psi=sparsND.psi,
+                           x0=sparsND.x0,y0=sparsND.y0,z0=sparsND.z0,
+                           dt=sparsND.dt,dt_stat=sparsND.dt_stat)
+
+        self.SimND.run(XEinit=Sim_ParsND.XEinit,Tmax=Sim_ParsND.Tmax,cil_speed=1*Sim_ParsND.cil_speed,
+                  U_const_fixed=Sim_ParsND.U_const_fixed,S_fixed=Sim_ParsND.S_fixed,
+                       dt=Sim_ParsND.dt,dt_stat=Sim_ParsND.dt_stat,
+                       plotSim=sparsND.plotSim,plot_intvl=sparsND.plot_intvl)
+
+        
     def gen_morphND(self,plotMorph=True,body_calcs=True,flow_calcs=True):
         """ A method to facilitate generating a MorphologyND object from the current 
             shape parameters.
@@ -854,6 +895,7 @@ class MorphPars():
         if plotMorph:
             # Plot the nondimensional morphology
             figureMND = plt.figure(num=67)
+            figureMND.clf()
             axesMND = figureMND.add_subplot(projection='3d')
             self.MND.plot_layers(axes=axesMND)
             

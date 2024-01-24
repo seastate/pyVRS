@@ -175,26 +175,31 @@ class VRSsim():
         self.K_VW = self.morph.layers[self.surface_layer].K_VW
         self.K_S = self.morph.layers[self.surface_layer].K_S
         self.K_C = self.morph.layers[self.surface_layer].K_C
-        
-        # Set up graphics
+
         self.fignum = fignum
-        if fig is not None:
-            self.figV = fig
-        else:
-            print('Creating new figure...')
-            self.figV = plt.figure(num=self.fignum)
-        self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
-        self.axes2 = self.figV.add_subplot(1,2,2,projection='3d')
+        ## Set up graphics
+        #self.fignum = fignum
+        #if fig is not None:
+        #    self.figV = fig
+        #else:
+        #    print('Creating new figure...')
+        #    self.figV = plt.figure(num=self.fignum)
+        #self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
+        #self.axes2 = self.figV.add_subplot(1,2,2,projection='3d')
         
-        plt.pause(1e-3)
+        #plt.pause(1e-3)
         
     def run(self,XEinit=None,resume=False,
                  U_const_fixed = np.asarray([0.,0.,0.]),
                  S_fixed = np.asarray([0.,0.,0.,0.,0.,0.,0.,0.,0.]),
                  cil_speed = 0.,
-                 Tmax=1,dt_plot=0.25,
-                 dt = 0.01,morph=None,surface_layer=1,flowfield=flowfield3):
+                 Tmax=1,dt_stat=0.25,plot_intvl=10,plotSim='all',
+                 dt=0.01,morph=None,surface_layer=1,flowfield=flowfield3):
                  #dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
+        #self.figV.clf()
+        #self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
+        #self.axes2 = self.figV.add_subplot(1,2,2,projection='3d')
+        self.plot_reset = True
         self.tiny = 10**-6
         self.U_const_fixed = U_const_fixed.copy()
         self.S_fixed = S_fixed.copy()
@@ -203,25 +208,27 @@ class VRSsim():
         self.flowfield(None,U_const_fixed=self.U_const_fixed,S_fixed=self.S_fixed)
         self.cil_speed = cil_speed
         self.dt = dt
-        self.dt_plot = dt_plot
+        self.dt_stat = dt_stat
+        plot_cnt = 0
         if XEinit is not None:
             self.XE = XEinit.reshape([6,])
         self.Tmax = Tmax
-        self.nsteps = ceil(self.Tmax/self.dt_plot)
-        self.axes1.scatter(self.XE[0],self.XE[1],self.XE[2],c='red')
+        self.nsteps = ceil(self.Tmax/self.dt_stat)
+        #self.axes1.scatter(self.XE[0],self.XE[1],self.XE[2],c='red')
         if not resume:
-            self.t_prev = -self.dt_plot
+            self.t_prev = -self.dt_stat
         # Set up data storage
         #self.data = AttrDict()
-        t0 = self.t_prev-self.dt_plot
+        t0 = self.t_prev-self.dt_stat
         self.time = [t0]                                        # A list for observation times
         self.position = [self.XE.tolist()]                            # A list for positions
         self.velocity = [self.Rotated_CoordsVRS(t0,self.XE).tolist()] # A list for absolute velocities
-        self.extflow = self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist()             # A list for ambient flow velocity
+        # A list for ambient flow velocity
+        self.extflow = self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist()             
         
         for istep in range(self.nsteps):
-            self.t_prev += self.dt_plot
-            t_next = min(self.t_prev+self.dt_plot,self.Tmax)
+            self.t_prev += self.dt_stat
+            t_next = min(self.t_prev+self.dt_stat,self.Tmax)
             XE_old = self.XE
             sol = solve_ivp(self.Rotated_CoordsVRS,[self.t_prev,t_next],self.XE,method='RK45',
                             first_step=1e-4,max_step=dt)
@@ -233,46 +240,77 @@ class VRSsim():
             self.position.append(self.XE.tolist())
             self.velocity.append(self.VEdot.tolist())
             self.extflow.extend(self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist())
-            #self.extflow.append(self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist())
             # Plotting output
-            title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,n2s_fmt(self.XE[0:3]),n2s_fmt(self.VEdot[0:3]))
-            self.axes1.set_title(title_str1)
-            self.axes1.plot([XE_old[0],self.XE[0]],[XE_old[1],self.XE[1]],[XE_old[2],self.XE[2]],c='blue')
-            self.axes1.set_xlabel('$X$ position')
-            self.axes1.set_ylabel('$Y$ position')
-            self.axes1.set_zlabel('$Z$ position')
-            tx = self.axes1.xaxis.get_offset_text().get_text()
-            if tx=='':
-                tx = '1'
-            ty = self.axes1.yaxis.get_offset_text().get_text()
-            if ty=='':
-                ty = '1'
-            tz = self.axes1.zaxis.get_offset_text().get_text()
-            if tz=='':
-                tz = '1'
-            scale_txt = 'scale =  {},   {},   {}'.format(tx,ty,tz)
-            try:
-                self.axes1.texts[0].remove()
-            except:
-                pass
-            self.axes1.text2D(0.05, 0.95, scale_txt, transform=self.axes1.transAxes)
-            # setting equal axes makes some things easier to see and others harder
-            #self.axes1.set_aspect('equal', adjustable='box')
-            self.axes1.set_aspect('equalxy', adjustable='box')
-            
-            self.axes2.cla()
-            self.morph.plot_layers(axes=self.axes2,XE=self.XE)
-            speed = sqrt((self.VEdot[0:3]**2).sum())
-            title_str2 = 'Euler angles = {}\n       Speed = {}'.format(n2s_fmt(self.XE[3:6],fmt='4.2f'),n2s_fmt(speed))
-            #title_str2 = '{}\n{}'.format(n2s_fmt(self.XE[3:6]),n2s_fmt(speed))
-            self.axes2.set_title(title_str2)
-
-            self.figV.canvas.draw()
-            self.figV.canvas.flush_events()
-            
-            plt.pause(1e-3)
+            plot_cnt += 1
+            if plotSim == 'all':
+                self.plot()
+            elif plotSim == 'intvl' and plot_cnt % plot_intvl == 0:
+                self.plot()
+            if plotSim == "end" and t_next == self.Tmax:
+                self.plot()
     
-    #def Rotated_CoordsVRS(self,XE,t):
+    def plot(self):
+        # Plotting output
+        if self.plot_reset:
+            # Set up graphics
+            #self.fignum = fignum
+            #if fig is not None:
+            #    self.figV = fig
+            #else:
+            #    print('Creating new figure...')
+            #    self.figV = plt.figure(num=self.fignum)
+            self.figV = plt.figure(num=self.fignum)
+            self.figV.clf()
+            self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
+            self.axes2 = self.figV.add_subplot(1,2,2,projection='3d')
+            plt.pause(1e-3)
+            self.plot_reset = False
+        #self.axes1.cla()
+        #title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(t_next,
+        title_str1 = 'time = {}\nposition = {}\nvelocity = {}'.format(self.time[-1],
+                                                                      n2s_fmt(self.XE[0:3]),
+                                                                      n2s_fmt(self.VEdot[0:3]))
+        self.axes1.cla()
+        self.axes1.set_title(title_str1)
+        position = np.asarray(self.position)[:,0:3]
+        self.axes1.scatter(position[0,0],position[0,1],position[0,2],c='red')
+        self.axes1.plot(position[:,0],position[:,1],position[:,2],c='blue')
+        #self.axes1.plot([XE_old[0],self.XE[0]],[XE_old[1],self.XE[1]],[XE_old[2],self.XE[2]],c='blue')
+        self.axes1.set_xlabel('$X$ position')
+        self.axes1.set_ylabel('$Y$ position')
+        self.axes1.set_zlabel('$Z$ position')
+        tx = self.axes1.xaxis.get_offset_text().get_text()
+        if tx=='':
+            tx = '1'
+        ty = self.axes1.yaxis.get_offset_text().get_text()
+        if ty=='':
+            ty = '1'
+        tz = self.axes1.zaxis.get_offset_text().get_text()
+        if tz=='':
+            tz = '1'
+        scale_txt = 'scale =  {},   {},   {}'.format(tx,ty,tz)
+        try:
+            self.axes1.texts[0].remove()
+        except:
+            pass
+        self.axes1.text2D(0.05, 0.95, scale_txt, transform=self.axes1.transAxes)
+        # setting equal axes makes some things easier to see and others harder
+        #self.axes1.set_aspect('equal', adjustable='box')
+        self.axes1.set_aspect('equalxy', adjustable='box')
+
+        self.axes2.cla()
+        self.morph.plot_layers(axes=self.axes2,XE=self.XE)
+        speed = sqrt((self.VEdot[0:3]**2).sum())
+        title_str2 = 'Euler angles = {}\n       Speed = {}'.format(n2s_fmt(self.XE[3:6],fmt='4.2f'),
+                                                                   n2s_fmt(speed))
+        #title_str2 = '{}\n{}'.format(n2s_fmt(self.XE[3:6]),n2s_fmt(speed))
+        self.axes2.set_title(title_str2)
+
+        self.figV.canvas.draw()
+        self.figV.canvas.flush_events()
+
+        plt.pause(1e-3)
+
     def Rotated_CoordsVRS(self,t,XE):
         """ This function calculates the translational velocity and time rate
             of change of Euler angles for a larva immersed in flow.

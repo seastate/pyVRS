@@ -34,8 +34,8 @@ mp = MorphPars()
 mp.new_geom_dim()      # create geom_pars dict
 
 mp.calc_geom_dim()     # calculate derived variables in geom_pars
-mp.new_sim_dim(pars={'phi':0,'Tmax':100,'dudz':-0.4,'dwdx':0.4})       # create sim_pars dict (can be modified without recalculation)
-#mp.new_sim_dim(pars={'phi':0,'Tmax':100,'dudz':-0.4,'dwdx':0.4})       # create sim_pars dict (can be modified without recalculation)
+mp.new_sim_dim(pars={'phi':0,'Tmax':100,'dudz':-0.4,'dwdx':0.4})    # create sim_pars dict (can be modified without recalculation)
+#mp.new_sim_dim(pars={'phi':0,'Tmax':100,'dudz':-0.4,'dwdx':0.4})   # create sim_pars dict (can be modified without recalculation)
 
 mp.calc_geom2shape()   # create/calculate shape_pars dict from geom_pars
 mp.new_geom2scale()    # create scale_pars dict from geom_pars
@@ -180,28 +180,30 @@ class SimPars():
 #===============================================================
 # run the dimensional simulation
 
-sim_pars=SimPars(dudz=spars.dudz,dvdz=spars.dvdz,dwdx=spars.dwdx,
+Sim_Pars=SimPars(dudz=spars.dudz,dvdz=spars.dvdz,dwdx=spars.dwdx,
                  Tmax=spars.Tmax,cil_speed=spars.cil_speed,
                  phi=spars.phi,theta=spars.theta,psi=spars.psi)
 
 Sim = flw.VRSsim(morph=M,fignum=58)
-Sim.run(XEinit=sim_pars.XEinit,Tmax=1*sim_pars.Tmax,cil_speed=1*sim_pars.cil_speed,
-        U_const_fixed=sim_pars.U_const_fixed,S_fixed=sim_pars.S_fixed)
+Sim.run(XEinit=Sim_Pars.XEinit,Tmax=1*Sim_Pars.Tmax,cil_speed=1*Sim_Pars.cil_speed,
+        U_const_fixed=Sim_Pars.U_const_fixed,S_fixed=Sim_Pars.S_fixed)
 
 #===============================================================
 # run the nondimensional simulation
 
-sim_parsND=SimPars(dudz=sparsND.dudz,dvdz=sparsND.dvdz,dwdx=sparsND.dwdx,
+Sim_ParsND=SimPars(dudz=sparsND.dudz,dvdz=sparsND.dvdz,dwdx=sparsND.dwdx,
                  Tmax=sparsND.Tmax,cil_speed=sparsND.cil_speed,
                  phi=sparsND.phi,theta=sparsND.theta,psi=sparsND.psi)
 
+print('sim_parsND = ',mp.sim_parsND)
+
 SimND = flw.VRSsim(morph=MND,fignum=68)
-#SimND.run(XEinit=sim_parsND.XEinit,Tmax=4400,cil_speed=0*sim_parsND.cil_speed,
-#          U_const_fixed=sim_parsND.U_const_fixed,S_fixed=sim_parsND.S_fixed,dt=1.,dt_plot=25.)
-#SimND.run(XEinit=sim_parsND.XEinit,Tmax=sim_pars.Tmax,cil_speed=1*sim_parsND.cil_speed,vel_scale=1/gpars.tau,
-#          U_const_fixed=sim_parsND.U_const_fixed,S_fixed=sim_parsND.S_fixed)
-SimND.run(XEinit=sim_parsND.XEinit,Tmax=sim_parsND.Tmax,cil_speed=1*sim_parsND.cil_speed,
-          U_const_fixed=sim_parsND.U_const_fixed,S_fixed=sim_parsND.S_fixed,dt=1.,dt_plot=25.)
+#SimND.run(XEinit=Sim_ParsND.XEinit,Tmax=4400,cil_speed=0*Sim_ParsND.cil_speed,
+#          U_const_fixed=Sim_ParsND.U_const_fixed,S_fixed=Sim_ParsND.S_fixed,dt=1.,dt_stat=25.)
+#SimND.run(XEinit=Sim_ParsND.XEinit,Tmax=Sim_Pars.Tmax,cil_speed=1*Sim_ParsND.cil_speed,vel_scale=1/gpars.tau,
+#          U_const_fixed=Sim_ParsND.U_const_fixed,S_fixed=Sim_ParsND.S_fixed)
+SimND.run(XEinit=Sim_ParsND.XEinit,Tmax=Sim_ParsND.Tmax,cil_speed=1*Sim_ParsND.cil_speed,
+          U_const_fixed=Sim_ParsND.U_const_fixed,S_fixed=Sim_ParsND.S_fixed,dt=1.,dt_stat=25.)
 
 
 
@@ -282,13 +284,13 @@ print('\n\nCalculating dimensional flow properties')
 M2.body_calcs()
 M2.flow_calcs(surface_layer=1)
 
-sim_pars2=SimPars(dudz=spars.dudz,dvdz=spars.dvdz,dwdx=spars.dwdx,
+Sim_Pars2=SimPars(dudz=spars.dudz,dvdz=spars.dvdz,dwdx=spars.dwdx,
                  Tmax=spars.Tmax,cil_speed=spars.cil_speed,
                  phi=spars.phi,theta=spars.theta,psi=spars.psi)
 
 Sim2 = flw.VRSsim(morph=M2,fignum=78)
-Sim2.run(XEinit=sim_pars2.XEinit,Tmax=1*sim_pars2.Tmax,cil_speed=1*sim_pars2.cil_speed,
-        U_const_fixed=sim_pars2.U_const_fixed,S_fixed=sim_pars2.S_fixed)
+Sim2.run(XEinit=Sim_Pars2.XEinit,Tmax=1*Sim_Pars2.Tmax,cil_speed=1*Sim_Pars2.cil_speed,
+        U_const_fixed=Sim_Pars2.U_const_fixed,S_fixed=Sim_Pars2.S_fixed)
 
 
 #===============================================================
@@ -318,13 +320,13 @@ print('\n\nCalculating dimensional flow properties')
 M2.body_calcs()
 M2.flow_calcs(surface_layer=1)
 
-sim_pars2=SimPars(dudz=spars.dudz,dvdz=spars.dvdz,dwdx=spars.dwdx,
+Sim_Pars2=SimPars(dudz=spars.dudz,dvdz=spars.dvdz,dwdx=spars.dwdx,
                  Tmax=spars.Tmax,cil_speed=spars.cil_speed,
                  phi=spars.phi,theta=spars.theta,psi=spars.psi)
 
 Sim2 = flw.VRSsim(morph=M2,fignum=88)
-Sim2.run(XEinit=sim_pars2.XEinit,Tmax=1*sim_pars2.Tmax,cil_speed=1*sim_pars2.cil_speed,
-        U_const_fixed=sim_pars2.U_const_fixed,S_fixed=sim_pars2.S_fixed)
+Sim2.run(XEinit=Sim_Pars2.XEinit,Tmax=1*Sim_Pars2.Tmax,cil_speed=1*Sim_Pars2.cil_speed,
+        U_const_fixed=Sim_Pars2.U_const_fixed,S_fixed=Sim_Pars2.S_fixed)
 
 
 
