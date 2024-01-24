@@ -39,7 +39,7 @@ set_break = False
 #eta_set = np.linspace(0.25,0.75,5)
 #simnum = alpha_set.size * beta_set.size * eta_set.size
 
-shear_set = np.linspace(0,.1,7)
+shear_set = np.linspace(0,.01,7)
 Vcil_set = np.linspace(0.,1.,5)
 simnum = shear_set.size * Vcil_set.size
 
@@ -112,6 +112,7 @@ for i_s,shear in enumerate(shear_set):
         print('new_data = ',new_data)
         
         figW = plt.figure(num=5)
+        figW.clf()
         axesW = figW.add_subplot()#projection='3d')
         pc = axesW.pcolor(dataW)
         figW.colorbar(pc,ax=axesW)
