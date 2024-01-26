@@ -909,7 +909,7 @@ class MorphPars():
         #
         return self.MND
 
-    def save_morphND(self,prefix='morph',path='MorphFiles',suffix='mrph',pars='baer'):
+    def save_morphND(self,prefix='morph',mpath='MorphFiles',suffix='mrph',pars='baer'):
         """
         A function to facilitate saving the current nondimensional swimming embryo 
         morphology with an informative name. The parameter pars determines which 
@@ -935,7 +935,7 @@ class MorphPars():
                 filename += '_r'+str(round(sh.rho_t,3))
         # complete the filename with the suffix
         filename += '.' + suffix
-        fullpath = os.path.join(path,filename)
+        fullpath = os.path.join(mpath,filename)
         with open(fullpath, 'wb') as handle:
             #print(f'Saving morphology as {fc_s.selected}')
             pickle.dump(self.MND, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -943,9 +943,9 @@ class MorphPars():
         #
         return fullpath
 
-    def load_morphND(self,fullpath=None,filename=None,path=None,load_meta=True,plotMorph=True):
+    def load_morphND(self,fullpath=None,filename=None,mpath=None,load_meta=True,plotMorph=True):
         if fullpath == None:
-            fullpath = os.path.join(path,filename)
+            fullpath = os.path.join(mpath,filename)
         #
         with open(fullpath, 'rb') as handle:
             self.MND = pickle.load(handle)
