@@ -194,7 +194,7 @@ class VRSsim():
                  S_fixed = np.asarray([0.,0.,0.,0.,0.,0.,0.,0.,0.]),
                  cil_speed = 0.,
                  Tmax=1,dt_stat=0.25,plot_intvl=10,plotSim='all',
-                 dt=0.01,morph=None,surface_layer=1,flowfield=flowfield3):
+                 dt=0.1,first_step=0.01,morph=None,surface_layer=1,flowfield=flowfield3):
                  #dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
         #self.figV.clf()
         #self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
@@ -231,7 +231,7 @@ class VRSsim():
             t_next = min(self.t_prev+self.dt_stat,self.Tmax)
             XE_old = self.XE
             sol = solve_ivp(self.Rotated_CoordsVRS,[self.t_prev,t_next],self.XE,method='RK45',
-                            first_step=1e-4,max_step=dt)
+                            first_step=first_step,max_step=dt)
             #                first_step=1e-4,max_step=1e-2)
             self.XE = sol.y[:,-1]
             self.VEdot = self.Rotated_CoordsVRS(t_next,self.XE)
