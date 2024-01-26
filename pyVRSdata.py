@@ -208,7 +208,7 @@ class DataManager():
         else:
             self.MM = MorphMatrix(pars=mpars,scale_pars=scale_pars)
         #
-        self.MM.genMatrix(morph_path=d.morph_path,pars={})
+        self.MM.genMatrix(morph_path=d.mm_path,pars={})
 
         # If requested, save the MorphMatrix object:
         #              None (default): Save to morph_path
