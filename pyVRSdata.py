@@ -321,4 +321,4 @@ class DataManager():
                     self.mp.load_morphND(fullpath=fpath,plotMorph=False)
                     self.SM = SimMatrix(mp=self.mp,spars=s)
                     self.SM.genMatrix()
-
+                    self.sim_data[i_a][i_b][i_e] = self.SM.sim_data
