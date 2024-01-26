@@ -69,7 +69,7 @@ class MorphMatrix():
                                       'd_s': p.d_s, 'nlevels_s': p.nlevels_s,
                                       'd_i': p.d_i, 'nlevels_i': p.nlevels_i})
                     self.mp.gen_morphND()
-                    fpath = self.mp.save_morphND(path=morph_path)
+                    fpath = self.mp.save_morphND(mpath=morph_path)
                     self.mrph_files[i_a][i_b][i_e] = fpath
 
 #==============================================================================
