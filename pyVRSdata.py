@@ -10,8 +10,6 @@ from math import pi
 import os
 #from meshSpheroid import chimeraSpheroid
 import pickle
-from copy import deepcopy
-
 
 #==============================================================================
 class MorphMatrix():
@@ -44,9 +42,8 @@ class MorphMatrix():
         self.scale_pars.update(scale_pars)
 
         
-    def genMatrix(self,morph_path='MorphFiles',break_num=0,pars={}):
-        """ Set up a matrix of embryo morphologies. For debugging, break>0
-            halts execution after break_num morphologies have been calculated.
+    def genMatrix(self,morph_path='MorphFiles',pars={}):
+        """ Set up a matrix of embryo morphologies. 
         """
         p = self.pars  # Create a shortcut
         
@@ -56,17 +53,10 @@ class MorphMatrix():
         simnum = p.alpha_set.size * p.beta_set.size * p.eta_set.size
         simcount = 0
         sigma = p.sigma
-        set_break = False
         #
         for i_a,alpha in enumerate(p.alpha_set):
-            if set_break:
-                break
             for i_b,beta in enumerate(p.beta_set):
-                if set_break:
-                    break
                 for i_e,eta in enumerate(p.eta_set):
-                    if set_break:
-                        break
                     simcount += 1
                     print(f'\n\n********** Calculating morphology {simcount}/{simnum} ************\n\n')
                     self.mp = MorphPars()
@@ -81,10 +71,6 @@ class MorphMatrix():
                     self.mp.gen_morphND()
                     fpath = self.mp.save_morphND(path=morph_path)
                     self.mrph_files[i_a][i_b][i_e] = fpath
-
-                    # If requested, break for debugging
-                    if simcount == break_num:
-                        set_break = True
 
 #==============================================================================
 class SimMatrix():
@@ -103,7 +89,7 @@ class SimMatrix():
                                'Vcil_set': np.linspace(0.,0.4,5),
                                'flow_type': 'rotation',
                                'XEinits': [[0.,0.,0.,pi/4,0.,pi]],
-                               'Tmax': 100, 'dt': 0.5, 'break_num': 0,
+                               'Tmax': 100, 'dt': 0.5,
                                'dt_stat': 1., 'skip_stat': 0,
                                'plot_intvl': 25, 'plotSim': 'intvl'})
         self.spars.update(spars)
@@ -120,41 +106,26 @@ class SimMatrix():
         self.sim_data = [[[None for i_x in range(len(s.XEinits))] \
                                 for i_v in s.Vcil_set] for i_s in s.shear_set]
         
-    def genMatrix(self,spars={},resume=False):
+    def genMatrix(self,spars={}):
         """ Set up a matrix of swimming simulations, and collect basic statistics.
 
             spars is a dictionary (or AttrDict) used optionally to update the
             current set of simulation parameters.
-        
-            resume==True causes execution to skip non-None entries in the results
-            nested list, sim_data. This follows a partial or interrupted matrix of
-            runs. If resume=False (the default), sim_data is reinitialized and all
-            entries are run.
         """
         # Set up a shortcut and update dictionary
         s = self.spars
         s.update(spars)
         # Assume that if simulation parameters have changed, need a reset of data list
-        if len(spars) > 0 or resume == False:
+        if len(spars) > 0:
             self.reset()
         # The total number of simulations, and a counter...
         simnum = s.Vcil_set.size * s.shear_set.size * len(s.XEinits)
         simcount = 0
-        set_break = False
         # Loops through simulation parameters
         for i_s,shear in enumerate(s.shear_set):
-            if set_break:
-                break
             for i_v,Vcil in enumerate(s.Vcil_set):
-                if set_break:
-                    break
                 for i_x,XEinit in enumerate(s.XEinits):
-                    if set_break:
-                        break
                     simcount += 1
-                    if resume and self.sim_data[i_s][i_v][i_x] is not None:
-                        print(f'\n\n********** Skipping simulation {simcount}/{simnum} ************\n\n')
-                        break
                     print(f'\n\n********** Calculating simulation {simcount}/{simnum} ************\n\n')
                     if s.flow_type == 'rotation':
                         dudz = -shear
@@ -191,21 +162,15 @@ class SimMatrix():
                                            avg_rel_velND[0],avg_rel_velND[1],avg_rel_velND[2]])
                     print('new_data = ',new_data)
                     self.sim_data[i_s][i_v][i_x] = new_data
-                    
-                    # If requested, break for debugging
-                    if simcount == s.break_num:
-                        set_break = True
 
 
-
-                
 #==============================================================================
 class DataManager():
     """
         A class to faciliate batch collection, analysis and plotting of swimming
         performance metrics for the pyVRS swimming embryo model.
     """
-    def __init__(self,dpars={},scale_pars={},**kwargs):
+    def __init__(self,dpars={}):
         """ Create a DataManager instance
         """
         # Create a dictionary to store parameters and add default parameters
@@ -216,22 +181,6 @@ class DataManager():
         d.mm_path =  'MorphFiles'
         d.mm_filename = 'MorphMatrix.mm'
         self.spars = AttrDict()
-        #d.alpha_set = np.linspace(1,3.5,6)
-        #d.beta_set = np.linspace(1,3,5)
-        #d.eta_set = np.linspace(0.25,0.75,5)
-        #d.sigma = 0.9
-        #d.gamma = 0.1
-        #d.rho_t = 10.388349514563107
-        #d.rho_i = 9.70873786407767
-        #d.d_s =  0.11285593694928399
-        #d.nlevels_s = (16, 16)
-        #d.d_i = 0.09404661412440334
-        #d.nlevels_i = (12, 12)
-        ## update with passed pars
-        #d.update(pars)
-        ## Set up scale dictionary, defaulting to nondimensional equivalent
-        #self.scale_pars = AttrDict({'V_t':1.,'rho_med':1,'mu':1.,'g':1})
-        #self.scale_pars.update(scale_pars)
         
     def loadMorphMatrix(self,mm_path=None,mm_filename=None):
         """ Load an existing MorphMatrix object.
@@ -248,9 +197,8 @@ class DataManager():
             self.MM = pickle.load(handle)
             print(f'Loaded MorphMatrix file {fullpath}')
 
-    def genMorphMatrix(self,MM=None,break_num=0,dpars={},mpars={},scale_pars={}):
-        """ Set up a matrix of embryo morphologies. For debugging, break>0
-            halts execution after break_num morphologies have been calculated.
+    def genMorphMatrix(self,MM=None,dpars={},mpars={},scale_pars={}):
+        """ Set up a matrix of embryo morphologies.
         """
         d = self.dpars  # Create a shortcut and update parameters dictionary
         d.update(dpars)
@@ -260,7 +208,7 @@ class DataManager():
         else:
             self.MM = MorphMatrix(pars=mpars,scale_pars=scale_pars)
         #
-        self.MM.genMatrix(morph_path=d.morph_path,break_num=break_num)
+        self.MM.genMatrix(morph_path=d.morph_path,pars={})
 
         # If requested, save the MorphMatrix object:
         #              None (default): Save to morph_path
@@ -278,7 +226,7 @@ class DataManager():
         print(f'Saved MorphMatrix as {fullpath}')
 
 
-    def genSimMatrix(self,MM=None,break_num=0,spars={},resume=False):
+    def genSimMatrix(self,MM=None,spars={}):
         """ Set up a matrix of swimming simulations, and collect basic statistics.
         """
         # The MorphMatix object should either be passed or already an attribute
@@ -310,7 +258,6 @@ class DataManager():
         simnum = p.alpha_set.size * p.beta_set.size * p.eta_set.size * \
                  s.Vcil_set.size * s.shear_set.size * len(s.XEinits)
         simcount = 0
-        set_break = False
 
         # Loops through morphologies
         for i_a in s.alpha_num:
@@ -322,3 +269,6 @@ class DataManager():
                     self.SM = SimMatrix(mp=self.mp,spars=s)
                     self.SM.genMatrix()
                     self.sim_data[i_a][i_b][i_e] = self.SM.sim_data
+
+
+
