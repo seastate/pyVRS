@@ -12,7 +12,7 @@ from math import pi
 
 from attrdict import AttrDict
 
-from pyVRSutils import n2s_fmt
+#from pyVRSutils import n2s_fmt
 from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler, VRSsim
 from meshSpheroid import chimeraSpheroid
 import pickle
@@ -21,12 +21,204 @@ import os
 
 #==============================================================================
 # Set up defaults for densities of named materials
-base_densities={'freshwater':1000.,
-                'seawater':1030.,
-                'tissue':1070.,
-                'lipid':900.,
-                'calcite':2669.}
+#base_densities={'freshwater':1000.,
+#                'seawater':1030.,
+#                'brackish':1015.,
+#                'tissue':1070.,
+#                'lipid':900.,
+#                'calcite':2669.,
+#                'other':None}
 
+#==============================================================================
+# Set up defaults for dictionary of named materials and their properties. The
+# relevant properties differ depending on the layer. For example, the Medium layer
+# requires a viscosity field but no color, etc. Materials such as water of
+# various types require all the fields implied by various usages, e.g. viscosity
+# if used as a medium and color if used as an inclusion.
+# The Surface is plotted with colors reflecting ciliary velocity, so 'tissue' color
+# is not used unless it is an inclusion within another inclusion.
+#
+
+# Define a library of materials to run out of the box (these can be modified or replaced when modules are invoked)
+Materials = AttrDict({'freshwater':AttrDict({'material':'freshwater','density':1000.,'color':np.asarray([0.1,0.3,0.3])}),
+                      'seawater':AttrDict({'material':'seawater','density':1030.,'color':np.asarray([0.3,0.3,0.3]),'mu':1030.*1.17e-6}),
+                      'brackish':AttrDict({'material':'brackish','density':1015.,'color':np.asarray([0.,1.0,0.])}),
+                      'tissue':AttrDict({'material':'tissue','density':1070.,'color':'purple'}),
+                      'lipid':AttrDict({'material':'lipid','density':900.,'color':np.asarray([0.,1.,1.])}),
+                      'calcite':AttrDict({'material':'calcite','density': 2669., 'color': 'gray'})})
+                      #'other': AttrDict({'material':'other','density':None, 'color': None}),
+                      #'g': 9.81,'Delta_rho':10.})
+
+# Define a default set of scale parameters, corresponding to the nondimensional case
+ScaleParams = AttrDict({'V_t':1.,'mu':1.,'Delta_rho':1.,'g':1.})
+#ScaleParams = AttrDict({'V_t':1.,'mu':1030.*1.17e-6,'Delta_rho':1.,'g': 9.81})
+
+# Define a default set of shape parameters. From the pyVRSdata mockup, use a formula to set xi below from sigma
+ShapeParams = Attrdict({'alpha_s':2.,'eta_s':0.3,'alpha_i':2.,'eta_i':0.3,'sigma':0.9,'beta':1.2})
+# the original defaults...
+#ShapeParams = Attrdict({'alpha_s':2.,'eta_s':0.3,'alpha_i':2.,'eta_i':0.3,'xi':0.3,'beta':1.2})
+
+# Define a default set of mesh parameters (these determine triangulation of the surface and inclusion)
+MeshParams = Attrdict({'d_s':0.11285593694928399,'nlevels_s':(16,16),'d_i':0.09404661412440334,'nlevels_i':(16,16)})
+
+# Define a method and use it to define a default set of material parameters.
+# By default, these correspond to nondimensionalized excess density
+def get_MatlParams(Materials=Materials,reference_material='seawater',Delta_rho=ScaleParams['Delta_rho']):
+    """
+       A method to generate a set of nondimensional materials parameters. By default the dimensional
+       material properties are taken from the predefined Materials AttrDict, the reference material
+       is seawater, and the reference excess density is taken from the predefined ScaleParams AttrDict.
+    """
+    matl_pars = deepcopy(Materials)
+    print('Materials[reference_material].density = ',Materials[reference_material].density)
+    for key in matl_pars.keys():
+        print(f'Materials[{key}] = {Materials[key]}')
+        matl_pars[key].density = (matl_pars[key].density-Materials[reference_material].density)/Delta_rho]
+        #mat_pars[key].density /= Materials.gamma * Materials[reference_material].density
+        # normalize viscosities
+        if 'mu' in Materials[key].keys():
+            Materials[key].mu /= Materials[reference_material].mu
+        print(f'matl_pars.{key} = {matl_pars[key]}')
+    return matl_pars
+
+MatlParams = get_MatlParams()
+
+# Define a method and use it to define a default set of chimera geometry parameters.
+def get_ChimeraParams(shape_pars=ShapeParams,scale_pars=ScaleParams,mesh_pars=MeshParams,
+                      geom_pars=AttrDict({})):
+    """
+       A method to calculate geometric parameters, as expected by the chimeraSpheroid class to generate
+       a constitutive chimera.
+
+       By default, geometric parameters are returned as an AttrDict. Alternatively, a dictionary or
+       AttrDict can be passed in the geom_pars argument.
+    """
+    # Define some shortcuts
+    V_t = scale_pars['V_t']
+    mu = scale_pars['mu']
+    Delta_rho = scale_pars['Delta_rho']
+    g = scale_pars['g']
+    beta = shape_pars['beta']
+    sigma = shape_pars['sigma']
+    xi = (1-gpI.eta)*(sigma - ((beta-1)/beta)**(1/3))
+    # Calcuate length and time scales
+    geom_pars['l'] = scale_pars['V_t']**(1./3.)
+    l = geom_pars['l']
+    geom_pars['tau'] = mu / (Delta_rho * g * l)
+    # Create a list of AttrDicts to carry parameters for each layer. For consistency with
+    # Morphology.Layers, the 0th item is the medium
+    geom_pars['Layers'] = [AttrDict({})]
+    # Generate the AttrDict of surface parameters, and create a shortcut
+    geom_pars['Layers'].append(AttrDict({}))
+    gpS = geom_pars['Layers'][1]
+    gpS.alpha = shape_pars['alpha_s']
+    gpS.eta = shape_pars['eta_s']
+    # Calculate inclusion and surface volumes
+    gpS.V = beta * V_t
+    # Calculate dimensions of surface and inclusion chimeras
+    gpS.D = (6.*beta/(pi*gpS.alpha))**(1./3.) * l
+    gpS.L0 = gpS.alpha * gpS.D
+    gpS.L2 = gpS.eta * gpS.L0
+    gpS.L1 = (1.-gpS.eta) * gpS.L0
+    # Add triangulation (mesh) parameters
+    gpS.d = mesh_pars['d_s']
+    gpS.nlevels = mesh_pars['nlevels_s']
+    # Generate the AttrDict of inclusion parameters, and create a shortcut
+    geom_pars['Layers'].append(AttrDict({}))
+    gpI = geom_pars['Layers'][2]
+    gpI.alpha = shape_pars['alpha_i']
+    gpI.eta = shape_pars['eta_i']
+    # Calculate inclusion and surface volumes
+    gpI.V = (beta-1.) * V_t
+    # Calculate dimensions of surface and inclusion chimeras
+    gpI.D = (6.*beta/(pi*gpI.alpha))**(1./3.) * l
+    gpI.L0 = gpI.alpha * gpI.D
+    gpI.L2 = gpI.eta * gpI.L0
+    gpI.L1 = (1.-gpI.eta) * gpI.L0
+    # Calculate vertical offset, and package as a translation vector as expected
+    # by chimeraSpheroid
+    gpI.h_i = xi * gpI.L0
+    gpI.translate = [0.,0.,gpI.h_i]
+    # Add triangulation (mesh) parameters
+    gpI.d = mesh_pars['d_i']
+    gpI.nlevels = mesh_pars['nlevels_i']
+    #
+    return geom_pars
+    
+'''    
+    alpha_i = shape_pars['alpha_i']
+    eta_i = shape_pars['eta_i']
+    # Calculate inclusion and surface volumes
+    geom_pars['V_i'] = (beta-1.) * V_t
+    # Calculate dimensions of surface and inclusion chimeras
+    geom_pars['D_i'] = (6.*(beta-1)/(pi*alpha_i))**(1./3.) * l
+    D_i = geom_pars['D_i']
+    geom_pars['L0_i'] = alpha_i * D_i
+    L0_i = geom_pars['L0_i']
+    geom_pars['L2_i'] = eta_i * L0_i
+    geom_pars['L1_i'] = (1.-eta_i) * L0_i
+    # Calculate vertical offset, and package as a translation vector as expected
+    # by chimeraSpheroid
+    geom_pars['h_i'] = shape['xi'] * L0_s
+    geom_pars['translate'] = [0.,0.,geom_pars['h_i']]
+    # Add triangulation (mesh) parameters
+    geom_pars['d_i'] = mesh_pars['d_i']
+    geom_pars['nlevels_i'] = mesh_pars['nlevels_i']
+'''
+GeomParams = get_ChimeraParams()
+'''
+def orig_gen_MaterialsND(Materials=Materials,reference_material='seawater'):
+    # A function to facilitate generating the nondimensional equivalent of a Materials
+    # dictionary, in which densities are normalized by the reference density.
+    MaterialsND = deepcopy(Materials)
+    print('Materials[reference_material].density = ',Materials[reference_material].density)
+    for key in MaterialsND.keys():
+        if key in ['g','gamma']:  # skip non-Material entries; these are normalized to 1, so
+            MaterialsND[key] = 1. # the nondimensional case is handled the same as the dimensional
+            continue
+        # normalize densities
+        print('key = ',key)
+        print('Materials = ',Materials[key])
+        MaterialsND[key].density /= Materials.gamma * Materials[reference_material].density
+        # normalize viscosities
+        if 'mu' in Materials[key].keys():
+            Materials[key].mu /= Materials[reference_material].mu
+        print(f'MaterialsND.{key} = {MaterialsND[key]}')
+    # normalize constants: (now done above)
+    #MaterialsND.g = 1.
+    #MaterialsND.gamma = 1.
+    return MaterialsND
+'''
+'''
+def gen_MaterialsND(Materials=Materials,reference_material='seawater',Delta_rho=None):
+    # A function to facilitate generating the nondimensional equivalent of a Materials
+    # dictionary, in which densities are normalized by the reference density.
+    # If the characteristic density (Delta_rho) is passed, that argument's value is
+    # used. Otherwise, it is taken from the Materials dictionary.
+    MaterialsND = deepcopy(Materials)
+    print('Materials[reference_material].density = ',Materials[reference_material].density)
+    for key in MaterialsND.keys():
+        if key in ['g']:  # skip non-Material entries (e.g., gravitational acceleration); these are normalized to 1, so
+            MaterialsND[key] = 1. # the nondimensional case is handled the same as the dimensional
+            continue
+        if key == 'Delta_rho':
+            if Delta_rho is not None:  # the characteristic excess density is set from the argument, if given
+                MaterialsND[key] = Delta_rho 
+            continue
+        # normalize densities
+        #print('key = ',key)
+        print(f'Materials[{key}] = {Materials[key]}')
+        MaterialsND[key].density = (MaterialsND[key].density-Materials[reference_material].density)/MaterialsND['Delta_rho']
+        #MaterialsND[key].density /= Materials.gamma * Materials[reference_material].density
+        # normalize viscosities
+        if 'mu' in Materials[key].keys():
+            Materials[key].mu /= Materials[reference_material].mu
+        print(f'MaterialsND.{key} = {MaterialsND[key]}')
+    return MaterialsND
+
+# A dictionary with normalized (nondimensional) densities:
+MaterialsND = gen_MaterialsND()
+'''    
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
 # in 3D, due to @Jochemspek,
@@ -52,70 +244,34 @@ def intersect_line_triangle(q1,q2,p1,p2,p3):
 class Layer():
     """ A base class to facilitate creating and modifying layers (surfaces enclosing
         or excluding morphological features of a swimming organism) for
-        hydrodynamic modeling. 
+        hydrodynamic modeling. Material is a dictionary or AttrDict, e.g. an entry 
+        in the Materials AttrDict. The attributes required to be in Material vary
+        across layer types: viscosity for the medium, density and color for tissue 
+        and inclusions, etc.
     """
-    def __init__(self,stlfile=None,vectors=None,pars={},layer_type=None,
-                 material=None,density=None,immersed_in=None,
-                 check_normals=True,**kwargs):
+    #def __init__(self,mode='cc',stlfile=None,vectors=None,pars={},layer_type=None,
+    #             Material=None,immersed_in=None,geomPars=None,
+    #             check_normals=True,**kwargs):
+    def __init__(self,vectors=None,layer_type=None,density=None,immersed_in=None,
+                 material=None,color=None,contains=[],get_points=True): #,**kwargs):
         """ Create a layer instance, using an AttrDict object.
         """
-        # Default base parameters
-        base_pars={'density':density,
-                   'material':material,
-                   'immersed_in':immersed_in,
-                   'contains':[],
-                   'scale_factor':1,
-                   'offset':np.array([0,0,0]),
-                   'rotate':np.array([0,0,0,0])}
+        print(f'Creating Layer of type {layer_type}...')
+        # Create a template of null parameters; these will be replaced/augmented
+        # by parameters in the arguments, where they are supplied.
+        self.pars=AttrDict({'layer_type' = layer_type,
+                            'density':density,
+                            'material':material,
+                            'immersed_in':immersed_in,
+                            'contains':contains,
+                            'color':color,})
         # Update with passed parameters
-        self.pars=AttrDict(base_pars)
-        self.pars.update(pars)
-        self.pars.layer_type = layer_type
+        #self.pars.update(pars)
         self.pars.transformations = []
         self.vectors = vectors
-        self.check_normals = check_normals
-        # If provided, load the specified stl file
-        self.pars.stlfile = stlfile
-        if vectors is not None:
-            self.vectors=vectors
-            self.update()
-        if self.pars.stlfile is not None:
-            self.loadSTL()
+        #self.update()
 
-    def loadSTL(self,stlfile=None,update=True):
-        """ A wrapper method to load an stl file as a numpy-stl mesh.
-            numpy-stl creates float32 arrays for vectors and normals, 
-            which are subject to errors during calculations. Here they
-            are replaced by float64 equivalents.
-        """
-        if stlfile is not None:
-            self.pars.stlfile = stlfile
-        # get float64 copy of vectors in the stl file
-        self.vectors = loadSTL(self.pars.stlfile)
-        if update:
-            self.update()
-
-    # Disable numpy-stl based transformations until they can be
-    # replaced by vector-based ones
-    #def translate_mesh(self,translation,update=True):
-    #    """ A convenience method to translate the current mesh
-    #    """
-    #    self.mesh.translate(translation)
-    #    self.pars.transformations.append(['trans',translation])
-    #    self.vectors = self.mesh.vectors.copy().astype('float64')
-    #    if update:
-    #        self.update()
-
-    #def rotate_mesh(self,axis,theta,point=None,update=True):
-    #    """ A convenience method to rotate the current mesh
-    #    """
-    #    self.mesh.rotate(axis,theta=theta,point=point)
-    #    self.pars.transformations.append(['rot',axis,theta])
-    #    self.vectors = self.mesh.vectors.copy().astype('float64')
-    #    if update:
-    #        self.update()
-
-    def update(self):
+    def update(self,check_normals=False):
         """ A convenience method to initialize or update mesh properties.
             The order is determined by the structure of numpy-stl.base.py,
             in which centroids are calculated separately; areas use internally
@@ -139,7 +295,7 @@ class Layer():
         self.max_ = self.vectors.reshape([3*m,3]).max(axis=0)
         # Get unormals, a set of normals scaled to unit length and
         # corrected to all point outwards
-        self.unitnormals()
+        self.unitnormals(check_normals=check_normals)
         # The following gives erroneous values when vertex direction is
         # not consistent, which is the case for many stls. It is based
         # directly on vertex coordinates, so correcting normals does
@@ -152,6 +308,47 @@ class Layer():
         self.pars.total_volume = self.volumes.sum()
         tet_centroids = 0.75 * self.centroids
         self.pars.volume_center = (tet_centroids*self.volumes.repeat(3,axis=1)).sum(axis=0)/self.pars.total_volume
+
+    def unitnormals(self,outwards=True,ref_point=None,check_normals=False):
+        """ A method to calculate unit normals for mesh faces.  using
+            numpy-stl methods. If outwards is True, the normals are
+            checked to insure they are outwards-pointing. This method
+            works only for simple shapes; it needs to be upgraded using
+            interior/exterior tracking e.g. with the intersect_line_triangle
+            code below.
+
+            For centered ellipsoids, use the temporary code below. 
+            TODO:
+            ref_point is a point guaranteed to be outside the layer. If not
+            provided, it is assigned using the builtin max_ and min_ mesh
+            attributes. Intersections with faces are counted to determine 
+            whether a point projected from each face along the unit normal
+            is interior or exterior.
+        """
+        self.check_normals = check_normals
+        # Calculate normals and rescale to unit length (deferring direction
+        # checks to the next step).
+        v0 = self.vectors[:, 0]
+        v1 = self.vectors[:, 1]
+        v2 = self.vectors[:, 2]
+        n = self.vectors.shape[0]
+        self.normals = np.cross(v1 - v0, v2 - v0)
+        self.areas = .5 * np.sqrt((self.normals ** 2).sum(axis=1,keepdims=True))
+        self.centroids = np.mean([v0,v1,v2], axis=0)
+        self.lengths = np.sqrt((self.normals**2).sum(axis=1,keepdims=True)).repeat(3,axis=1)
+        self.unormals = self.normals / self.lengths
+        #self.unormals = self.mesh.get_unit_normals() # unit normals, possibly misdirected
+        # checking normals is time-consuming, so do it only when check_normals is True
+        # (only for Surface layers).
+        if self.check_normals:
+            counts = self.count_intersections()
+            evens = counts % 2==0
+            odds = counts % 2!=0
+            s = np.zeros(counts.shape)
+            s[odds] = -1
+            s[evens] = 1
+            # correct directions for inwards pointing normals
+            self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
 
     def count_intersections(self,ref_point=None,project=0.01e-6):
         print('Counting intersections...')
@@ -193,47 +390,7 @@ class Layer():
         print('...completed.')
         print('scount = {}, icount = {}'.format(scount,icount))
         return counts
-            
-    def unitnormals(self,outwards=True,ref_point=None):
-        """ A method to calculate unit normals for mesh faces.  using
-            numpy-stl methods. If outwards is True, the normals are
-            checked to insure they are outwards-pointing. This method
-            works only for simple shapes; it needs to be upgraded using
-            interior/exterior tracking e.g. with the intersect_line_triangle
-            code below.
 
-            For centered ellipsoids, use the temporary code below. 
-            TODO:
-            ref_point is a point guaranteed to be outside the layer. If not
-            provided, it is assigned using the builtin max_ and min_ mesh
-            attributes. Intersections with faces are counted to determine 
-            whether a point projected from each face along the unit normal
-            is interior or exterior.
-        """
-
-        # Calculate normals and rescale to unit length (deferring direction
-        # checks to the next step).
-        v0 = self.vectors[:, 0]
-        v1 = self.vectors[:, 1]
-        v2 = self.vectors[:, 2]
-        n = self.vectors.shape[0]
-        self.normals = np.cross(v1 - v0, v2 - v0)
-        self.areas = .5 * np.sqrt((self.normals ** 2).sum(axis=1,keepdims=True))
-        self.centroids = np.mean([v0,v1,v2], axis=0)
-        self.lengths = np.sqrt((self.normals**2).sum(axis=1,keepdims=True)).repeat(3,axis=1)
-        self.unormals = self.normals / self.lengths
-        #self.unormals = self.mesh.get_unit_normals() # unit normals, possibly misdirected
-        # checking normals is time-consuming, so do it only when check_normals is True
-        # (only for Surface layers).
-        if self.check_normals:
-            counts = self.count_intersections()
-            evens = counts % 2==0
-            odds = counts % 2!=0
-            s = np.zeros(counts.shape)
-            s[odds] = -1
-            s[evens] = 1
-            # correct directions for inwards pointing normals
-            self.unormals *= s.reshape([s.shape[0],1]).repeat(3,axis=1)
 
 class Surface(Layer):
     """ A derived class to contain a surface Layer, which additionally 
@@ -242,15 +399,18 @@ class Surface(Layer):
 
         Surface layers are always immersed in the medium, which is (pseudo)layer 0.
     """
-    def __init__(self,stlfile=None,vectors=None,pars={},layer_type='surface',
-                 density=1070.,material='tissue',immersed_in=0,
-                 get_points=True,check_normals=True,
-                 tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
-        super().__init__(stlfile,vectors,pars,layer_type,material,density,immersed_in,
-                         check_normals,**kwargs)
+    #def __init__(self,stlfile=None,vectors=None,pars={},layer_type='surface',
+    #             Material=Materials.tissue,immersed_in=0,geomPars=None,
+    #             get_points=True,check_normals=True,
+    #             tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
+    def __init__(self,vectors=None,layer_type='surface',density=None,immersed_in=0,
+                 material=None,color=None,get_points=True,check_normals=False,
+                 tetra_project=0.03,tetra_project_min=0.01e-6):
+        super().__init__(vectors,layer_type,density,immersed_in,material,color)
         self.pars.tetra_project = tetra_project
         self.pars.tetra_project_min = tetra_project_min
-        print('Created Surface object with parameters:\n{}'.format(self.pars))
+        print('Calculating vector properties for new Surface object with parameters:\n{}'.format(self.pars))
+        self.update(check_normals=check_normals)
         if get_points:
             print('Getting control and singularity points...')
             self.get_points()
@@ -283,45 +443,99 @@ class Inclusion(Layer):
         the specified surrounding Layer. This assumption arises in calculations
         of gravity and buoyancy centers and forces.
     """
-    def __init__(self,stlfile=None,vectors=None,pars={},layer_type='inclusion',
-                 density=1030.,material='seawater',immersed_in=None,
-                 check_normals=True,**kwargs):
-        super().__init__(stlfile,vectors,pars,layer_type,material,density,immersed_in,
-                         check_normals,**kwargs)
-        print('Created Inclusion object with parameters:\n{}'.format(self.pars))
+    def __init__(self,vectors=None,layer_type='inclusion',density=None,immersed_in=None,
+                 material=None,color=None,check_normals=False):
+        super().__init__(vectors,layer_type,density,immersed_in,material,color)
+        print('Calculating vector properties for new Inclusion object with parameters:\n{}'.format(self.pars))
+        self.update(check_normals=check_normals)
 
 #==============================================================================
 class Medium(Layer):
     """ A derived class to contain the properties of the medium (ambient seawater,
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
-    def __init__(self,stlfile=None,vectors=None,pars={},layer_type='medium',
-                 density=1030.,material='seawater',mu = 1030.*1.17e-6,
-                 check_normals=False,**kwargs):
-        super().__init__(stlfile,vectors,pars,layer_type,material,density,
-                         check_normals,**kwargs)
-        #mu = nu * density
-        #self.pars.nu = nu
+    def __init__(self,layer_type='medium',density=None,material='seawater',mu=None,):
+        super().__init__(layer_type,density,material)
         self.pars.mu = mu
+        #self.pars.mu = Material.mu
         print('Created Medium object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
 class Morphology():
     """ A class to faciliate specifications and calculations with organismal morphologies, including 
         ciliated and unciliated surfaces, inclusions and internal gaps, and various material
-        densities.
+        densities. Medium-, Surface- and Inclusion-type layers are created by invoking those
+        respective inheritance Classes.
     """
-    def __init__(self,densities={},g=9.81,**kwargs):
-        """ Create a morphology instance, using an AttrDict object.
- 
+    def __init__(self,metadata={}):
+    #def __init__(self,matlPars=MatlParams,shapePars=ShapeParams,scalePars=ScaleParams,meshPars=MeshParams,
+    #             medium='seawater',metadata={},**kwargs):
+        """ Create a morphology instance, preserving metadata and creating a placeholder
+            list to contain Layers
         """
-        # Update with passed parameters
-        self.densities=AttrDict(base_densities)
-        self.densities.update(densities)
-        self.g = g # Include as an argument for units flexibility
+        self.metadata = metadata
+        self.Layers = []
+        # Preserve passed parameters
+        #self.matlPars = matlPars
+        #self.scalePars = scalePars
+        #self.shapePars = shapePars
+        #self.meshPars = meshPars
+        # Calculate geometric parameters for the surface and inclusion
+        #self.GeomParams = get_ChimeraParams(shape_pars=shapePars,scalePars=scalePars,mesh_pars=meshPars)
+        #self.g = Materials.g # Include as an argument for units flexibility and nondimensionalization
         # Add an attribute to store Layers. The medium (typically
         # ambient seawater) is always the 0th layer
-        self.layers = [Medium(density=self.densities['seawater'])]
+        #self.layers = [Medium(Material=self.matlPars[medium]*self.scalePars['Delta_rho'],mu=self.scalePars['mu'])]
+
+    def gen_surface(self,vectors=None,layer_type='surface',density=None,immersed_in=0,material=None,
+                    color=None,get_points=True,check_normals=False,get_points=True,
+                    tetra_project=0.03,tetra_project_min=0.01e-6):
+        """A method to facilitate generating Surface objects to iniate
+           a morphology. The parameter immersed_in specifies the layer
+           in which the surface is immersed, almost always the medium with
+           layer index 0.
+
+           Behaviors are inherited from the Layer object. The vectors argument is
+           used to define the Surface. 
+        """
+        try:
+            nlayers = len(self.layers)
+            surface = Surface(vectors=vectors,layer_type=layer_type,density=density,immersed_in=immersed_in,
+                              material=material,check_normals=check_normals,get_points=get_points,
+                              tetra_project=tetra_project,tetra_project_min=tetra_project_min)
+            print('got here')
+            self.layers.append(surface)
+            # Add new layer to the layer which contains it
+            self.layers[surface.pars.immersed_in].pars['contains'].append(nlayers)
+            print('Added Surface to layers list:')
+            self.print_layer(layer_list=[-1])
+        except:
+            print('Failed to load file or generate a Surface object...')
+        
+    def gen_inclusion(self,vectors=None,layer_type='inclusion',density=None,immersed_in=None,
+                 material=None,color=None,check_normals=False):
+        """A method to facilitate generating Inclusion objects within a surface
+           or another inclusion. The parameter immersed_in specifies the index of 
+           the layer in which the inclusion is immersed, either a Surface 
+           layer of layer_type tissue or an enclosing Inclusion. Common inclusions 
+           include seawater, lipid and calcite.
+
+           Behaviors are inherited from the Layer object. The vectors argument is
+           used to define the Inclusion.
+        """
+        if immersed_in is None:
+            print('Please specify immersed_in, the index of the layer \nsurrounding this inclusion.')
+        try:
+            nlayers = len(self.layers)
+            inclusion = Inclusion(vectors=vectors,layer_type=layer_type,density=density,immersed_in=immersed_in,
+                 material=material,color=color,check_normals=check_normals)
+            self.layers.append(inclusion)
+            # Add new layer to the layer which contains it
+            print('Adding new layer to container...')
+            self.layers[immersed_in].pars['contains'].append(nlayers)
+            print('Added inclusion {} to layers list...'.format(len(self.layers)-1))
+        except:
+            print('Failed to load file to generate a Inclusion object...')
 
     def print_layer(self,layer_list=[],print_pars=True):
         """A method to display a summary of layer properties.
@@ -333,53 +547,6 @@ class Morphology():
             if print_pars:
                 print(self.layers[l].pars)
                     
-    def gen_surface(self,stlfile=None,vectors=None,pars={},
-                        layer_type='surface',get_points=True,
-                        material='tissue',immersed_in=0):
-        """A method to facilitate generating Surface objects to iniate
-           a morphology. The parameter immersed_in specifies the layer
-           in which the surface is immersed, almost always the medium with
-           layer index 0.
-        """
-        try:
-            nlayers = len(self.layers)
-            surface = Surface(stlfile=stlfile,vectors=vectors,pars=pars,
-                              density=self.densities[material],
-                              layer_type=layer_type,get_points=get_points,
-                              material=material,immersed_in=immersed_in,
-                              check_normals=self.check_normals)
-            self.layers.append(surface)
-            # Add new layer to the layer which contains it
-            self.layers[surface.pars.immersed_in].pars['contains'].append(nlayers)
-            print('Added surface to layers list:')
-            self.print_layer(layer_list=[-1]) #[len(self.layers)-1])
-        except:
-            print('Failed to load file or generate a Surface object...')
-        
-    def gen_inclusion(self,stlfile=None,vectors=None,pars={},
-                        layer_type='inclusion',
-                        material='seawater',immersed_in=None):
-        """A method to facilitate generating Inclusion objects within a surface
-           or another inclusion. The parameter immersed_in specifies the index of 
-           the layer in which the inclusion is immersed, almost always a surface 
-           layer of layer_type tissue. Common inclusions include seawater, lipid 
-           and calcite.
-        """
-        if immersed_in is None:
-            print('Please specify immersed_in, the index of the layer \nsurrounding this inclusion.')
-        try:
-            nlayers = len(self.layers)
-            inclusion = Inclusion(stlfile=stlfile,vectors=vectors,pars=pars,
-                              density=self.densities[material],layer_type=layer_type,
-                              material=material,immersed_in=immersed_in,
-                              check_normals=self.check_normals)
-            self.layers.append(inclusion)
-            # Add new layer to the layer which contains it
-            print('Adding new layer to container...')
-            self.layers[immersed_in].pars['contains'].append(nlayers)
-            print('Added inclusion {} to layers list...'.format(len(self.layers)-1))
-        except:
-            print('Failed to load file to generate a Inclusion object...')
 
     def plot_layers(self,axes,alpha=0.5,autoscale=True,XE=None,f=0.75):
         """A method to simplify basic 3D visualization of larval morphologies.
@@ -394,16 +561,22 @@ class Morphology():
                 colors = np.zeros([nfaces,3])
                 colors[:,0] = layer.rel_speed.flatten()
                 colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
-            elif layer.pars.material == 'lipid':
-                colors = np.asarray([0.,1.,1.])
-            elif layer.pars.material == 'calcite':
-                colors = 'gray'
-            elif layer.pars.material == 'seawater':
-                colors = np.asarray([0.3,0.3,0.3])
-            elif layer.pars.material == 'freshwater':
-                colors = np.asarray([0.1,0.3,0.3])
             else:
-                print('Unknown layer material in plot_layers; skipping layer {}'.format(i))
+                colors = layer.pars.color
+            #elif layer.pars.material == 'lipid':
+            #    colors = np.asarray([0.,1.,1.])
+            #elif layer.pars.material == 'calcite':
+            #    colors = 'gray'
+            #elif layer.pars.material == 'seawater':
+            #    colors = np.asarray([0.3,0.3,0.3])
+            #elif layer.pars.material == 'freshwater':
+            #    colors = np.asarray([0.1,0.3,0.3])
+            #elif layer.pars.material == 'brackish':
+            #    colors = np.asarray([0.,1.0,0.])
+            #elif layer.pars.material == 'other':
+            #    colors = 'orange'
+            #else:
+            #    print('Unknown layer material in plot_layers; skipping layer {}'.format(i))
             vectors = layer.vectors.copy()
             for m in range(vectors.shape[0]):
                 if XE is not None:
@@ -739,506 +912,3 @@ class Morphology():
             except:
                 print('Q_inv not found')
 
-
-#==============================================================================
-class MorphologyND(Morphology):
-    """ A derived class to faciliate specifications and calculations with nondimensionalized
-        organismal morphologies. This class is structurally equivalent to a dimensional
-        morphology. The purpose of this classes are: (a) to clarify which of a large set
-        of morphologies are nondimensional, using the object type as a filter; and (b) to
-        streamline conversion of dimensional scenarios to nondimensional ones, and vice
-        versa.
-    """
-    def __init__(self,densities={},gamma=1.,g=1.,metadata={},**kwargs):
-        """ Create a morphology instance, using an AttrDict object.
- 
-        """
-        super().__init__(densities,g,**kwargs)
-        # Save metadata, if any
-        self.metadata = metadata
-        # nondimensionalize densities by medium (seawater) density
-        reference_density = gamma*self.densities['seawater']
-        for mtrl,dens in self.densities.items():
-            self.densities.update({mtrl:dens/reference_density})
-        print('Updated densities: ',self.densities)
-        print(f'before: g = {self.g}')
-        self.g = 1.                  # gravity is scaled to 1 in nondimensionalization
-        print(f'after: g = {self.g}')
-        # Add an attribute to store Layers. The medium (typically
-        # ambient seawater) is always the 0th layer
-        self.layers = [Medium(density=self.densities['seawater'],mu = 1)]
-
-#==============================================================================
-class SimPars():
-    """
-    A simple class to facilitate acquiring and passing VRS simulation
-    parameters with interactive_output widgets.
-    """
-    def __init__(self,dudz=0.,dvdz=0.,dwdx=0.,U0=0.,U1=0.,U2=0.,
-                 Tmax=20.,cil_speed=0.5*1000*1e-6,
-                 phi=pi/3.,theta=-pi/4.,psi=pi,
-                 x0=0.,y0=0.,z0=0.,
-                 dt=0.01,dt_stat=0.25):
-        self.dudz = dudz
-        self.dvdz = dvdz
-        self.dwdx = dwdx
-        self.U0 = U0
-        self.U1 = U1
-        self.U2 = U2
-        self.Tmax = Tmax
-        self.cil_speed = cil_speed
-        self.S_fixed = np.asarray([0.,0.,dudz,0.,0.,dvdz,dwdx,0.,0.])
-        self.U_const_fixed = np.asarray([U0,U1,U2])
-        self.XEinit = np.asarray([x0,y0,z0,phi,theta,psi])
-        self.dt = dt
-        self.dt_stat = dt_stat
-
-#==============================================================================
-class MorphPars():
-    """ A class to faciliate specifications and calculations with parameter sets 
-        for early embryo morphologies. There are three distinct forms of these 
-        parameter sets:
-            1. dimensional geometrical & simulation parameters
-            2. nondimensional geometrical & simulation parameters
-            3. Shape and scaling parameters
-        Together, shape and scaling parameters define either dimensional or non-
-        dimensional geometrical & simulation parameters. Likewise, dimensional
-        geometrical & simulation parameters define a set of shape and scaling
-        parameters. Methods are provided to facilitate conversion of one form to
-        the others. 
-
-        Parameters are stored in AttrDict objects (enhanced dictionaries):
-            - geom_pars contains geometrical information, as required by meshSpheroid,
-              and additional information needed to calculate Morphology objects.
-            - sim_pars contains simulation parameters (shears, ciliary velocity, t_end)
-              as required by VRSsim
-            - ___ND versions are nondimensional versions of the above.
-            - shape_pars contains shape parameters (alpha, beta, eta, xi)
-            - scale_pars contains parameters (tissue volume, viscosity, density, etc.)
-              needed to reconstruct a dimensional scenario from the shape parameters
-
-        SI units are used throughout.
-    """
-    def __init__(self,densities={},densitiesND={},**kwargs):
-        """ Create AttrDict objects to contain parameters of different types:
-        """
-        print('Creating new MorphPars objects...')
-        # Create AttrDict objects for the dimensional and nondimensional scenarios
-        self.geom_pars = AttrDict()
-        self.sim_pars = AttrDict()
-        self.geom_parsND = AttrDict()
-        self.sim_parsND = AttrDict()
-        # shape_pars contains shape parameters 
-        self.shape_pars = AttrDict()
-        self.scale_pars = AttrDict()
-        
-    def gen_simND(self,run=True,plotSim='all',fignum=68):
-        """ A method to facilitate generating a VRSsim object from the current 
-            nondimensional simulation parameters. If run=True, the simulation
-            is automatically run after it is defined.
-
-            The current MND morphology is used, and must be defined before the
-            simulation object is created.
-        """
-        print('Creating a SimND object from shape_pars...')
-        #self.calc_geom_nondim() # create/update geom_parsND from shape_pars
-
-        self.SimND = VRSsim(morph=self.MND,fignum=fignum)
-
-        # If requested, run the simulation
-        if run:
-            self.run_simND(plotSim=plotSim)
-        
-    def run_simND(self,plotSim='all',sim_parsND={}):
-        """ A method to facilitate running a VRSsim object from the current nondimensional
-            simulation parameters.
-        """
-        # Update with new parameters, if any
-        self.sim_parsND.update(sim_parsND)
-        # Create a shortcut
-        sparsND = self.sim_parsND
-        Sim_ParsND=SimPars(dudz=sparsND.dudz,dvdz=sparsND.dvdz,dwdx=sparsND.dwdx,
-                           Tmax=sparsND.Tmax,cil_speed=sparsND.cil_speed,
-                           phi=sparsND.phi,theta=sparsND.theta,psi=sparsND.psi,
-                           x0=sparsND.x0,y0=sparsND.y0,z0=sparsND.z0,
-                           dt=sparsND.dt,dt_stat=sparsND.dt_stat)
-
-        self.SimND.run(XEinit=Sim_ParsND.XEinit,Tmax=Sim_ParsND.Tmax,cil_speed=1*Sim_ParsND.cil_speed,
-                  U_const_fixed=Sim_ParsND.U_const_fixed,S_fixed=Sim_ParsND.S_fixed,
-                       dt=Sim_ParsND.dt,dt_stat=Sim_ParsND.dt_stat,
-                       plotSim=sparsND.plotSim,plot_intvl=sparsND.plot_intvl)
-
-        
-    def gen_morphND(self,plotMorph=True,body_calcs=True,flow_calcs=True):
-        """ A method to facilitate generating a MorphologyND object from the current 
-            shape parameters.
-        """
-        print('Creating a MorphologyND object from shape_pars...')
-        self.calc_geom_nondim() # create/update geom_parsND from shape_pars
-        # make a shortcut
-        gmND = self.geom_parsND
-        # Create metadata dictionary
-        mdata = {'shape_pars':self.shape_pars}
-        #mdata = {'geom_parsND':mp.geom_parsND,'shape_pars':mp.shape_pars}
-        self.MND = MorphologyND(gamma=gmND.gamma,metadata=mdata)
-        self.MND.check_normals = False
-        # set up the nondimensional surface morphology
-        self.CEsurfND = chimeraSpheroid(D=gmND.D_s,L1=gmND.L1_s,L2=gmND.L2_s,d=gmND.d_s,nlevels=gmND.nlevels_s)
-        self.MND.gen_surface(vectors=self.CEsurfND.vectors)
-        # test if there is an inclusion
-        if self.shape_pars.beta > 1:  
-            # set up the nondimensional inclusion morphology
-            self.CEinclND = chimeraSpheroid(D=gmND.D_i,L1=gmND.L1_i,L2=gmND.L2_i,d=gmND.d_i,nlevels=gmND.nlevels_i,
-                             translate=[0,0,gmND.h_i])
-            # materials parameter can be 'seawater', 'tissue', 'lipid' or 'calcite'
-            self.MND.gen_inclusion(vectors=self.CEinclND.vectors,material='freshwater',immersed_in=1)
-        if plotMorph:
-            # Plot the nondimensional morphology
-            figureMND = plt.figure(num=67)
-            figureMND.clf()
-            axesMND = figureMND.add_subplot(projection='3d')
-            self.MND.plot_layers(axes=axesMND)
-            
-            figureMND.canvas.draw()
-            figureMND.canvas.flush_events()
-            plt.pause(0.25)
-        if body_calcs:  # if requested, calculate buoyancy & gravity forces
-            self.MND.body_calcs()
-        if flow_calcs:  # if requested, calculate flow around the surface
-            self.MND.flow_calcs(surface_layer=1)
-        #
-        return self.MND
-
-    def save_morphND(self,prefix='morph',mpath='MorphFiles',suffix='mrph',pars='baer'):
-        """
-        A function to facilitate saving the current nondimensional swimming embryo 
-        morphology with an informative name. The parameter pars determines which 
-        parameters will be included in the filename: a = alpha, b = beta, e=eta, r = rho
-        (assumed to be for the surface layer).
-        
-        Values for those parameters are taken from the current shape_pars dictionary.
-        This method should be run after gen_morphND, before shape parameters are
-        changed, to insure the saved metadata is correct.
-        """
-        # make a shortcut
-        sh = self.shape_pars
-        # Construct filename and path
-        filename = prefix
-        for c in pars:
-            if c=='a':
-                filename += '_a'+str(round(sh.alpha_s,3))
-            if c=='b':
-                filename += '_b'+str(round(sh.beta,3))
-            if c=='e':
-                filename += '_e'+str(round(sh.eta_s,3))
-            if c=='r':
-                filename += '_r'+str(round(sh.rho_t,3))
-        # complete the filename with the suffix
-        filename += '.' + suffix
-        fullpath = os.path.join(mpath,filename)
-        with open(fullpath, 'wb') as handle:
-            #print(f'Saving morphology as {fc_s.selected}')
-            pickle.dump(self.MND, handle, protocol=pickle.HIGHEST_PROTOCOL)
-            print(f'Saved morphology as {fullpath}')
-        #
-        return fullpath
-
-    def load_morphND(self,fullpath=None,filename=None,mpath=None,load_meta=True,plotMorph=True):
-        if fullpath == None:
-            fullpath = os.path.join(mpath,filename)
-        #
-        with open(fullpath, 'rb') as handle:
-            self.MND = pickle.load(handle)
-            print(f'Loaded morphology file {fullpath}')
-        if load_meta:
-            try:
-                self.shape_pars = self.MND.metadata['shape_pars']
-                print('Loaded shape_pars from metadata...')
-                if plotMorph:
-                    # Plot the nondimensional morphology
-                    figureMND = plt.figure(num=47)
-                    axesMND = figureMND.add_subplot(projection='3d')
-                    self.MND.plot_layers(axes=axesMND)
-
-                    figureMND.canvas.draw()
-                    figureMND.canvas.flush_events()
-                    plt.pause(0.25)
-            except:
-                self.shape_pars = {}
-                print('>>>>>>>Failed to Load shape_pars from metadata<<<<<<<<<')
-
-        
-    def new_sim_dim(self,dudz=0.,dvdz=0.,dwdx=0.,Tmax=10.,cil_speed=500e-6,
-                    phi=pi/3,theta=pi/4,psi=pi,x0=0,y0=0,z0=0,pars={}):
-        """ A method to parameterize a dimensional embryo swimming simulation.
-
-            A default parameter set is provided, as a functional example. Alternative parameters
-            can be provided directly as arguments or as elements of the sim_pars dictionary argument.
-            The pars dictionary argument is considered to be the standard method, and in
-            case of duplication an entry in the pars dictionary supercedes the direct argument.
-        """
-        print('Creating or replacing geo_pars dictionary...')
-        new_pars = {'dudz':dudz,'dvdz':dvdz,'dwdx':dwdx,'Tmax':Tmax,
-                    'cil_speed':cil_speed,'phi':phi,'theta':theta,'psi':psi,
-                     'x0':x0,'y0':y0,'z0':z0}
-        self.sim_pars.update(new_pars)
-        self.sim_pars.update(pars)
-        return self.sim_pars
-        
-    def calc_sim_nondim(self,pars={}):
-        """ A method to calculate nondimensional embryo swimming simulation parameters
-            from the corresponding dimensional parameters in sim_pars, and characteristic
-            length and time scales in geom_pars.
-
-            The nondimensional parameters are stored in sim_parsND.
-        """
-        print('Creating or replacing the sim_parsND dictionary...')
-        self.sim_pars.update(pars)  # incorporate any updates
-        # Create a shortcut
-        sm = self.sim_pars
-        print('sm = ',sm)
-        p = self.geom_pars
-        smn = self.sim_parsND
-        #
-        smn.cil_speed = p.tau/p.l * sm.cil_speed
-        smn.dudz = p.tau * sm.dudz
-        smn.dwdx = p.tau * sm.dwdx
-        smn.dvdz = p.tau * sm.dvdz
-        smn.Tmax = sm.Tmax/p.tau
-        #
-        smn.theta = sm.theta
-        smn.phi = sm.phi
-        smn.psi = sm.psi
-        smn.x0 = sm.x0/p.l
-        smn.y0 = sm.y0/p.l
-        smn.z0 = sm.z0/p.l
-        
-    def calc_sim_dim(self,pars={}):
-        """ A method to calculate dimensional embryo swimming simulation parameters
-            from the corresponding nondimensional parameters in sim_parsND, and characteristic
-            length and time scales in geom_pars.
-
-            The nondimensional parameters are stored in sim_parsND.
-        """
-        print('Creating or replacing the sim_pars dictionary...')
-        self.sim_pars.update(pars)  # incorporate any updates
-        # Create a shortcut
-        sm = self.sim_pars
-        p = self.geom_pars
-        smn = self.sim_parsND
-        #
-        sm.cil_speed = p.l/p.tau * smn.cil_speed
-        sm.dudz = 1/p.tau * smn.dudz
-        sm.dwdx = 1/p.tau * smn.dwdx
-        sm.dvdz = 1/p.tau * smn.dvdz
-        sm.Tmax = p.tau * smn.Tmax
-        #
-        sm.theta = smn.theta
-        sm.phi = smn.phi
-        sm.psi = smn.psi
-        sm.x0 = p.l * smn.x0
-        sm.y0 = p.l * smn.y0
-        sm.z0 = p.l * smn.z0
-        
-    def new_geom_dim(self,D_s=50e-6,L1_s=100e-6,L2_s=40e-6,D_i=30e-6,L1_i=50e-6,L2_i=20e-6,
-                     h_i=40e-6,d_s=6e-6,nlevels_s=[16,12],d_i=5e-6,nlevels_i=[12,8],
-                     pars={},calc=True,g=9.81,mu=1.17e-6 * 1030.,
-                     rho_med=base_densities['seawater'],gamma=0.1,
-                     rho_t=base_densities['tissue'],
-                     rho_i=base_densities['freshwater']):
-        """ A method to parameterize a dimensional embryo geometry.
-
-            A default parameter set is provided, as a functional example. Alternative parameters
-            can be provided directly as arguments or as elements of the geom_pars dictionary argument.
-            The pars dictionary argument is considered to be the standard method, and in
-            case of duplication an entry in the pars dictionary supercedes the direct argument.
-
-            g is the gravitational constant, provided as a way to use non-SI units (but don't).
-        """
-        print('Creating or replacing geo_pars dictionary...')
-        new_pars = {'D_s':D_s,'L1_s':L1_s,'L2_s':L2_s,'D_i':D_i,'L1_i':L1_i,'L2_i':L2_i,'h_i':h_i, \
-                    'd_s':d_s,'nlevels_s':nlevels_s,'d_i':d_i,'nlevels_i':nlevels_i, \
-                    'mu':mu,'rho_med':rho_med,'gamma':gamma,'rho_t':rho_t,'rho_i':rho_i,'g':g}
-        self.geom_pars.update(new_pars)
-        self.geom_pars.update(pars)
-        
-        # If directed (and by default), calculate corresponding nondimensional parameters
-        if calc:
-            self.calc_geom_dim()
-
-    def calc_geom_dim(self):
-        """ A method to calculate the geometrical properties derived from the current dimensional
-            geom_pars parameter set.
-
-            This should be re-executed after each change of the basic geometrical parameters, to
-            update the derived geom_pars dictionary entries.
-        """
-        print('Calculating derived geometrical parameters from geom_pars...')
-        # make a shortcut
-        p = self.geom_pars
-        # Calculate total lengths
-        p.L0_s = p.L1_s + p.L2_s
-        p.L0_i = p.L1_i + p.L2_i
-        # Calculate volumes
-        p.V_s = pi/6 * p.L0_s * p.D_s**2
-        p.V_i = pi/6 * p.L0_i * p.D_i**2
-        p.V_t = p.V_s - p.V_i
-        # Calculate length and time scales
-        p.l = p.V_t**(1/3)
-        p.tau = p.mu / (p.gamma * p.rho_med * p.g * p.V_t**(1/3))
-        ## save scales as attributes, because they are common to many calculations
-        #self.l = p.l
-        #self.tau = p.tau
-        # return the new AttrDict, in case it needs to be used directly
-        return self.geom_pars
-
-    def new_shape2geom(self):
-        """ A method to calculate dimensional geometry parameters from the current shape
-            and scale parameters.
-
-            Shape parameters are stored in the shape_pars dictionary. Scale parameters
-            are stored in the scale_pars dictionary. The new geometrical parameters are
-            stored in the pars_geom dictionary.
-        """
-        print('Calculating geom_pars from shape_pars and scale_pars...')
-        # Create shortcuts
-        sh = self.shape_pars
-        sc = self.scale_pars
-        p = self.geom_pars
-        # Calculate geometry from the shape and scale parameters
-        #print(sc.g)
-        #print(p)
-        p.g = sc.g
-        p.mu = sc.mu
-        p.rho_med = sc.rho_med
-        # Try moving gamma to shape dictionary (so it is stored in ND metadata)
-        p.gamma = sh.gamma
-        #p.gamma = sc.gamma
-        # Try moving gamma to the shape dictionary
-        p.rho_t = p.gamma*sc.rho_med * sh.rho_t
-        p.rho_i = p.gamma*sc.rho_med * sh.rho_i
-        #p.rho_t = sc.gamma*sc.rho_med * sh.rho_t
-        #p.rho_i = sc.gamma*sc.rho_med * sh.rho_i
-        p.V_t = sc.V_t
-        p.V_s = sh.beta * sc.V_t
-        p.V_i = (sh.beta-1) * sc.V_t
-        p.l = p.V_t**(1/3)
-        p.tau = p.mu / (p.gamma*p.rho_med * p.g * p.V_t**(1/3))
-        #
-        p.D_s = (6*sh.beta/(pi*sh.alpha_s))**(1/3) * p.l
-        p.D_i = (6*(sh.beta-1)/(pi*sh.alpha_i))**(1/3) * p.l
-        p.L0_s = sh.alpha_s * p.D_s
-        p.L2_s = sh.eta_s * p.L0_s
-        p.L1_s = (1-sh.eta_s) * p.L0_s
-        p.L0_i = sh.alpha_i * p.D_i
-        p.L2_i = sh.eta_i * p.L0_i
-        p.L1_i = (1-sh.eta_i) * p.L0_i
-        p.h_i = sh.xi * p.L0_s
-        # Pass the tiling parameters
-        p.d_s = sh.d_s * p.l
-        p.nlevels_s = sh.nlevels_s
-        p.d_i = sh.d_i * p.l
-        p.nlevels_i = sh.nlevels_i
-        # return the new AttrDict, in case it needs to be used directly
-        return self.geom_pars
-
-    def new_geom2scale(self,pars={}):
-        """ A method to calculate scale parameters from a set of dimensional geometry parameters.
-            Scale parameters are stored in the scale_pars dictionary.
-
-            Together, the scale_pars and shape_pars dictionaries contain the information required
-            to reconstruct a dimensional embryo swimming scenario.
-
-            By default, parameters are taken from the geom_pars dictionary. The pars dictionary 
-            can be used to update or augment values in the scale_pars dictionary.
-        """
-        print('Calculating scale_pars from geom_pars...')
-        # Create shortcuts
-        p = self.geom_pars
-        sc = self.scale_pars
-        # Calculate shape indices
-        sc.V_t= p.V_t
-        sc.mu = p.mu
-        sc.rho_med = p.rho_med
-        sc.gamma = p.gamma
-        sc.g = p.g
-        sc.update(pars)
-        # return the new AttrDict, in case it needs to be used directly
-        return self.scale_pars
-
-    def calc_geom2shape(self):
-        """ A method to calculate shape parameters from a set of dimensional geometry parameters.
-
-            In addition to the proper shape parameters (alpha, eta, beta, xi), the nondimensional
-            tissue and inclusion densities are calculated, because they are required for the flow
-            precalculations in Morphology methods. Currently, the tiling parameters d_ and nlevels
-            are also carried with the shape parameters.
-        """
-        print('Calculating shape_pars from geom_pars...')
-        # Create shortcuts
-        p = self.geom_pars
-        sh = self.shape_pars
-        # Calculate shape indices
-        sh.alpha_s = p.L0_s/p.D_s
-        sh.eta_s = p.L2_s/p.L0_s
-        sh.alpha_i = p.L0_i/p.D_i
-        sh.eta_i = p.L2_i/p.L0_i
-        sh.xi = p.h_i/p.L0_s
-        sh.beta = p.V_s/p.V_t
-        # Calculate nondimensional densities
-        sh.rho_t = p.rho_t/(p.gamma*p.rho_med)
-        sh.rho_i = p.rho_i/(p.gamma*p.rho_med)
-        # Anticipate moving gamma to the shape dictionary
-        sh.gamma = p.gamma
-        # Store the tiling parameters, because they are needed for reconstructing geom_pars
-        sh.d_s = p.d_s / p.l
-        sh.nlevels_s = p.nlevels_s
-        sh.d_i = p.d_i / p.l
-        sh.nlevels_i = p.nlevels_i
-        # return the new AttrDict, in case it needs to be used directly
-        return self.shape_pars
-
-    def calc_geom_nondim(self):
-        """ A method to calculate the nondimensional parameter set from 
-            a dimensional embryo swimming scenario, as defined by the current 
-            parameter sets in the geom_pars, shape_pars and scale_pars dictionaries.
-        """
-        # Calculate shape indices
-        pn = self.geom_parsND
-        p = self.geom_pars
-        sh = self.shape_pars
-        sc = self.scale_pars
-        #
-        pn.gamma = sh.gamma
-        #pn.rho_med = 1.
-        pn.rho_med = 1./sh.gamma
-        pn.rho_t = sh.rho_t
-        pn.rho_i = sh.rho_i
-        #pn.rho_t = p.rho_t/(p.gamma*p.rho_med)
-        #pn.rho_i = p.rho_i/(p.gamma*p.rho_med)
-        #pn.rho_t = p.rho_t/p.rho_med
-        #pn.rho_i = p.rho_i/p.rho_med
-        #
-        pn.V_t = 1.
-        pn.V_s = sh.beta
-        pn.V_i = sh.beta - 1
-        #
-        pn.l = 1.
-        pn.tau = 1.
-        #pn.D_t = (6/(pi*sh.alpha_s))**(1/3)
-        pn.D_s = (6*sh.beta/(pi*sh.alpha_s))**(1/3)
-        pn.L0_s = sh.alpha_s * pn.D_s
-        pn.L2_s = sh.eta_s * pn.L0_s
-        pn.L1_s = (1-sh.eta_s) * pn.L0_s
-        pn.D_i = (6*(sh.beta-1)/(pi*sh.alpha_i))**(1/3)
-        pn.L0_i = sh.alpha_i * pn.D_i
-        pn.L2_i = sh.eta_i * pn.L0_i
-        pn.L1_i = (1-sh.eta_i) * pn.L0_i
-        pn.h_i = sh.xi * pn.L0_s
-        # These are saved in shape_pars
-        pn.nlevels_s = sh.nlevels_s
-        pn.d_s = sh.d_s
-        pn.nlevels_i = sh.nlevels_i
-        pn.d_i = sh.d_i
-        #
-        return pn

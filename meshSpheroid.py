@@ -4,6 +4,8 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 import numpy as np
 from math import *
+from attrdict import AttrDict
+
 
 #plt.ion()
 #plt.ioff()
@@ -12,7 +14,8 @@ Exy = lambda t_,a_,b_: (a_*cos(t_),b_*sin(t_))
 class chimeraSpheroid():
     """ A class to facilitate creating and modifying meshes forming chimeras 
         of two semi-spheroids as approximations of microorganism forms for 
-        hydrodynamic modeling.
+        hydrodynamic modeling. Parameters are contained in geom_pars, an
+        argument that is either an AttrDict or dictionary instance.
 
         The resulting chimera has diameter D, with the upper semi-spheroid of 
         height L1 and the lower of height L2.
@@ -22,35 +25,23 @@ class chimeraSpheroid():
         class defined the horizontal section with radius rather than diameter,
         and defines the lower semispheroid with a negative height.
     """
-    def __init__(self,D=None,L1=None,L2=None,d=None,nlevels=[16,12],levels=True,
-                 translate=None,calc=True,tile=True,**kwargs):
-        # Add geometric parameters as characteristics
-        self.D = D
-        self.L1 = L1
-        self.L2 = L2
-        self.translate = translate
+    def __init__(self,geomPars=None,levels=True,tile=True):
         # Add tiling parameters as characteristics
-        self.d = d
-        self.nlevels = nlevels
+        print('chimeraSpheroid: defining with geomPars')
+        self.geomPars = geomPars
+        #print(self.geomPars)
         self.levels = levels
-        # If requested, calculate shape parameters (fails if numerical values
-        # are not supplied)
-        if calc:
-            self.get_shape_params()
-            # If requested (and numerical values are supplied), calculate tiles
-            if tile:
-                self.get_tiles()
-
-    def get_shape_params(self):
-        # Calculate shape parameters
-        self.L0 = self.L1 + self.L2
-        self.alpha = self.L0/self.D
-        self.eta = self.L2/self.L0
+        # If requested (true by default), calculate tiles
+        if tile:
+            print('chimeraSpheroid: calculating tiles...')
+            self.get_tiles()
         
     def get_tiles(self):
         # Generate tiles for the upper semispheroid, using radius a = D/2, and 
         # the upper height parameter b=L1 projecting upwards
-        SE = semiSpheroid(a=self.D/2,b = self.L1,d = self.d,nlevel=self.nlevels[0])
+        print('tiling upper semispheroid...')
+        SE = semiSpheroid(a=self.geomPars.D/2,b = self.geomPars.L1,
+                          d = self.geomPars.d,nlevel=self.geomPars.nlevels[0],levels=self.levels)
         SE.tile_quadrant()   # Create tiles for 1/8 of the spheroid
         SE.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE.mirror_tiles(directions=['x','y'])
@@ -58,7 +49,9 @@ class chimeraSpheroid():
         # Generate tiles for the lower semispheroid, using radius a = D/2, and
         # the lower height parameter b=-L2 projecting downwards (preserves exact
         # symmetries with upper semispheroid)
-        SE2 = semiSpheroid(a=self.D/2,b = -self.L2,d = self.d,nlevel=self.nlevels[1])
+        print('tiling lower semispheroid...')
+        SE2 = semiSpheroid(a=self.geomPars.D/2,b = -self.geomPars.L2,
+                           d = self.geomPars.d,nlevel=self.geomPars.nlevels[1],levels=self.levels)
         SE2.tile_quadrant()   # Create tiles for 1/8 of the spheroid
         SE2.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE2.mirror_tiles(directions=['x','y'])
@@ -66,11 +59,11 @@ class chimeraSpheroid():
         # Combine to form a complete closed shape
         self.vectors = np.append(SE.vectors,SE2.vectors,axis=0)
         # Translate in xyz, if requested
-        if self.translate is not None:
+        if self.geomPars.translate is not None:
             # trigger an error if translate does not have 3 entries
-            t0 = self.translate[0]
-            t1 = self.translate[1]
-            t2 = self.translate[2]
+            t0 = self.geomPars.translate[0]
+            t1 = self.geomPars.translate[1]
+            t2 = self.geomPars.translate[2]
             m = self.vectors.shape[0]
             self.vectors.reshape([3*m,3])[:,0] += t0
             self.vectors.reshape([3*m,3])[:,1] += t1
