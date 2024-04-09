@@ -19,206 +19,7 @@ import pickle
 from copy import deepcopy
 import os
 
-#==============================================================================
-# Set up defaults for densities of named materials
-#base_densities={'freshwater':1000.,
-#                'seawater':1030.,
-#                'brackish':1015.,
-#                'tissue':1070.,
-#                'lipid':900.,
-#                'calcite':2669.,
-#                'other':None}
 
-#==============================================================================
-# Set up defaults for dictionary of named materials and their properties. The
-# relevant properties differ depending on the layer. For example, the Medium layer
-# requires a viscosity field but no color, etc. Materials such as water of
-# various types require all the fields implied by various usages, e.g. viscosity
-# if used as a medium and color if used as an inclusion.
-# The Surface is plotted with colors reflecting ciliary velocity, so 'tissue' color
-# is not used unless it is an inclusion within another inclusion.
-#
-
-# Define a library of materials to run out of the box (these can be modified or replaced when modules are invoked)
-Materials = AttrDict({'freshwater':AttrDict({'material':'freshwater','density':1000.,'color':np.asarray([0.1,0.3,0.3])}),
-                      'seawater':AttrDict({'material':'seawater','density':1030.,'color':np.asarray([0.3,0.3,0.3]),'mu':1030.*1.17e-6}),
-                      'brackish':AttrDict({'material':'brackish','density':1015.,'color':np.asarray([0.,1.0,0.])}),
-                      'tissue':AttrDict({'material':'tissue','density':1070.,'color':'purple'}),
-                      'lipid':AttrDict({'material':'lipid','density':900.,'color':np.asarray([0.,1.,1.])}),
-                      'calcite':AttrDict({'material':'calcite','density': 2669., 'color': 'gray'})})
-                      #'other': AttrDict({'material':'other','density':None, 'color': None}),
-                      #'g': 9.81,'Delta_rho':10.})
-
-# Define a default set of scale parameters, corresponding to the nondimensional case
-ScaleParams = AttrDict({'V_t':1.,'mu':1.,'Delta_rho':1.,'g':1.})
-#ScaleParams = AttrDict({'V_t':1.,'mu':1030.*1.17e-6,'Delta_rho':1.,'g': 9.81})
-
-# Define a default set of shape parameters. From the pyVRSdata mockup, use a formula to set xi below from sigma
-ShapeParams = Attrdict({'alpha_s':2.,'eta_s':0.3,'alpha_i':2.,'eta_i':0.3,'sigma':0.9,'beta':1.2})
-# the original defaults...
-#ShapeParams = Attrdict({'alpha_s':2.,'eta_s':0.3,'alpha_i':2.,'eta_i':0.3,'xi':0.3,'beta':1.2})
-
-# Define a default set of mesh parameters (these determine triangulation of the surface and inclusion)
-MeshParams = Attrdict({'d_s':0.11285593694928399,'nlevels_s':(16,16),'d_i':0.09404661412440334,'nlevels_i':(16,16)})
-
-# Define a method and use it to define a default set of material parameters.
-# By default, these correspond to nondimensionalized excess density
-def get_MatlParams(Materials=Materials,reference_material='seawater',Delta_rho=ScaleParams['Delta_rho']):
-    """
-       A method to generate a set of nondimensional materials parameters. By default the dimensional
-       material properties are taken from the predefined Materials AttrDict, the reference material
-       is seawater, and the reference excess density is taken from the predefined ScaleParams AttrDict.
-    """
-    matl_pars = deepcopy(Materials)
-    print('Materials[reference_material].density = ',Materials[reference_material].density)
-    for key in matl_pars.keys():
-        print(f'Materials[{key}] = {Materials[key]}')
-        matl_pars[key].density = (matl_pars[key].density-Materials[reference_material].density)/Delta_rho]
-        #mat_pars[key].density /= Materials.gamma * Materials[reference_material].density
-        # normalize viscosities
-        if 'mu' in Materials[key].keys():
-            Materials[key].mu /= Materials[reference_material].mu
-        print(f'matl_pars.{key} = {matl_pars[key]}')
-    return matl_pars
-
-MatlParams = get_MatlParams()
-
-# Define a method and use it to define a default set of chimera geometry parameters.
-def get_ChimeraParams(shape_pars=ShapeParams,scale_pars=ScaleParams,mesh_pars=MeshParams,
-                      geom_pars=AttrDict({})):
-    """
-       A method to calculate geometric parameters, as expected by the chimeraSpheroid class to generate
-       a constitutive chimera.
-
-       By default, geometric parameters are returned as an AttrDict. Alternatively, a dictionary or
-       AttrDict can be passed in the geom_pars argument.
-    """
-    # Define some shortcuts
-    V_t = scale_pars['V_t']
-    mu = scale_pars['mu']
-    Delta_rho = scale_pars['Delta_rho']
-    g = scale_pars['g']
-    beta = shape_pars['beta']
-    sigma = shape_pars['sigma']
-    xi = (1-gpI.eta)*(sigma - ((beta-1)/beta)**(1/3))
-    # Calcuate length and time scales
-    geom_pars['l'] = scale_pars['V_t']**(1./3.)
-    l = geom_pars['l']
-    geom_pars['tau'] = mu / (Delta_rho * g * l)
-    # Create a list of AttrDicts to carry parameters for each layer. For consistency with
-    # Morphology.Layers, the 0th item is the medium
-    geom_pars['Layers'] = [AttrDict({})]
-    # Generate the AttrDict of surface parameters, and create a shortcut
-    geom_pars['Layers'].append(AttrDict({}))
-    gpS = geom_pars['Layers'][1]
-    gpS.alpha = shape_pars['alpha_s']
-    gpS.eta = shape_pars['eta_s']
-    # Calculate inclusion and surface volumes
-    gpS.V = beta * V_t
-    # Calculate dimensions of surface and inclusion chimeras
-    gpS.D = (6.*beta/(pi*gpS.alpha))**(1./3.) * l
-    gpS.L0 = gpS.alpha * gpS.D
-    gpS.L2 = gpS.eta * gpS.L0
-    gpS.L1 = (1.-gpS.eta) * gpS.L0
-    # Add triangulation (mesh) parameters
-    gpS.d = mesh_pars['d_s']
-    gpS.nlevels = mesh_pars['nlevels_s']
-    # Generate the AttrDict of inclusion parameters, and create a shortcut
-    geom_pars['Layers'].append(AttrDict({}))
-    gpI = geom_pars['Layers'][2]
-    gpI.alpha = shape_pars['alpha_i']
-    gpI.eta = shape_pars['eta_i']
-    # Calculate inclusion and surface volumes
-    gpI.V = (beta-1.) * V_t
-    # Calculate dimensions of surface and inclusion chimeras
-    gpI.D = (6.*beta/(pi*gpI.alpha))**(1./3.) * l
-    gpI.L0 = gpI.alpha * gpI.D
-    gpI.L2 = gpI.eta * gpI.L0
-    gpI.L1 = (1.-gpI.eta) * gpI.L0
-    # Calculate vertical offset, and package as a translation vector as expected
-    # by chimeraSpheroid
-    gpI.h_i = xi * gpI.L0
-    gpI.translate = [0.,0.,gpI.h_i]
-    # Add triangulation (mesh) parameters
-    gpI.d = mesh_pars['d_i']
-    gpI.nlevels = mesh_pars['nlevels_i']
-    #
-    return geom_pars
-    
-'''    
-    alpha_i = shape_pars['alpha_i']
-    eta_i = shape_pars['eta_i']
-    # Calculate inclusion and surface volumes
-    geom_pars['V_i'] = (beta-1.) * V_t
-    # Calculate dimensions of surface and inclusion chimeras
-    geom_pars['D_i'] = (6.*(beta-1)/(pi*alpha_i))**(1./3.) * l
-    D_i = geom_pars['D_i']
-    geom_pars['L0_i'] = alpha_i * D_i
-    L0_i = geom_pars['L0_i']
-    geom_pars['L2_i'] = eta_i * L0_i
-    geom_pars['L1_i'] = (1.-eta_i) * L0_i
-    # Calculate vertical offset, and package as a translation vector as expected
-    # by chimeraSpheroid
-    geom_pars['h_i'] = shape['xi'] * L0_s
-    geom_pars['translate'] = [0.,0.,geom_pars['h_i']]
-    # Add triangulation (mesh) parameters
-    geom_pars['d_i'] = mesh_pars['d_i']
-    geom_pars['nlevels_i'] = mesh_pars['nlevels_i']
-'''
-GeomParams = get_ChimeraParams()
-'''
-def orig_gen_MaterialsND(Materials=Materials,reference_material='seawater'):
-    # A function to facilitate generating the nondimensional equivalent of a Materials
-    # dictionary, in which densities are normalized by the reference density.
-    MaterialsND = deepcopy(Materials)
-    print('Materials[reference_material].density = ',Materials[reference_material].density)
-    for key in MaterialsND.keys():
-        if key in ['g','gamma']:  # skip non-Material entries; these are normalized to 1, so
-            MaterialsND[key] = 1. # the nondimensional case is handled the same as the dimensional
-            continue
-        # normalize densities
-        print('key = ',key)
-        print('Materials = ',Materials[key])
-        MaterialsND[key].density /= Materials.gamma * Materials[reference_material].density
-        # normalize viscosities
-        if 'mu' in Materials[key].keys():
-            Materials[key].mu /= Materials[reference_material].mu
-        print(f'MaterialsND.{key} = {MaterialsND[key]}')
-    # normalize constants: (now done above)
-    #MaterialsND.g = 1.
-    #MaterialsND.gamma = 1.
-    return MaterialsND
-'''
-'''
-def gen_MaterialsND(Materials=Materials,reference_material='seawater',Delta_rho=None):
-    # A function to facilitate generating the nondimensional equivalent of a Materials
-    # dictionary, in which densities are normalized by the reference density.
-    # If the characteristic density (Delta_rho) is passed, that argument's value is
-    # used. Otherwise, it is taken from the Materials dictionary.
-    MaterialsND = deepcopy(Materials)
-    print('Materials[reference_material].density = ',Materials[reference_material].density)
-    for key in MaterialsND.keys():
-        if key in ['g']:  # skip non-Material entries (e.g., gravitational acceleration); these are normalized to 1, so
-            MaterialsND[key] = 1. # the nondimensional case is handled the same as the dimensional
-            continue
-        if key == 'Delta_rho':
-            if Delta_rho is not None:  # the characteristic excess density is set from the argument, if given
-                MaterialsND[key] = Delta_rho 
-            continue
-        # normalize densities
-        #print('key = ',key)
-        print(f'Materials[{key}] = {Materials[key]}')
-        MaterialsND[key].density = (MaterialsND[key].density-Materials[reference_material].density)/MaterialsND['Delta_rho']
-        #MaterialsND[key].density /= Materials.gamma * Materials[reference_material].density
-        # normalize viscosities
-        if 'mu' in Materials[key].keys():
-            Materials[key].mu /= Materials[reference_material].mu
-        print(f'MaterialsND.{key} = {MaterialsND[key]}')
-    return MaterialsND
-
-# A dictionary with normalized (nondimensional) densities:
-MaterialsND = gen_MaterialsND()
-'''    
 #==============================================================================
 # Code to find the intersection, if there is one, of a line and a triangle
 # in 3D, due to @Jochemspek,
@@ -244,16 +45,10 @@ def intersect_line_triangle(q1,q2,p1,p2,p3):
 class Layer():
     """ A base class to facilitate creating and modifying layers (surfaces enclosing
         or excluding morphological features of a swimming organism) for
-        hydrodynamic modeling. Material is a dictionary or AttrDict, e.g. an entry 
-        in the Materials AttrDict. The attributes required to be in Material vary
-        across layer types: viscosity for the medium, density and color for tissue 
-        and inclusions, etc.
+        hydrodynamic modeling.
     """
-    #def __init__(self,mode='cc',stlfile=None,vectors=None,pars={},layer_type=None,
-    #             Material=None,immersed_in=None,geomPars=None,
-    #             check_normals=True,**kwargs):
     def __init__(self,vectors=None,layer_type=None,density=None,immersed_in=None,
-                 material=None,color=None,contains=[],get_points=True): #,**kwargs):
+                 color=None,contains=[],get_points=True): #,**kwargs):
         """ Create a layer instance, using an AttrDict object.
         """
         print(f'Creating Layer of type {layer_type}...')
@@ -261,7 +56,6 @@ class Layer():
         # by parameters in the arguments, where they are supplied.
         self.pars=AttrDict({'layer_type' = layer_type,
                             'density':density,
-                            'material':material,
                             'immersed_in':immersed_in,
                             'contains':contains,
                             'color':color,})
@@ -399,14 +193,10 @@ class Surface(Layer):
 
         Surface layers are always immersed in the medium, which is (pseudo)layer 0.
     """
-    #def __init__(self,stlfile=None,vectors=None,pars={},layer_type='surface',
-    #             Material=Materials.tissue,immersed_in=0,geomPars=None,
-    #             get_points=True,check_normals=True,
-    #             tetra_project=0.03,tetra_project_min=0.01e-6,**kwargs):
     def __init__(self,vectors=None,layer_type='surface',density=None,immersed_in=0,
-                 material=None,color=None,get_points=True,check_normals=False,
+                 color=None,get_points=True,check_normals=False,
                  tetra_project=0.03,tetra_project_min=0.01e-6):
-        super().__init__(vectors,layer_type,density,immersed_in,material,color)
+        super().__init__(vectors,layer_type,density,immersed_in,color)
         self.pars.tetra_project = tetra_project
         self.pars.tetra_project_min = tetra_project_min
         print('Calculating vector properties for new Surface object with parameters:\n{}'.format(self.pars))
@@ -444,8 +234,8 @@ class Inclusion(Layer):
         of gravity and buoyancy centers and forces.
     """
     def __init__(self,vectors=None,layer_type='inclusion',density=None,immersed_in=None,
-                 material=None,color=None,check_normals=False):
-        super().__init__(vectors,layer_type,density,immersed_in,material,color)
+                 color=None,check_normals=False):
+        super().__init__(vectors,layer_type,density,immersed_in,color)
         print('Calculating vector properties for new Inclusion object with parameters:\n{}'.format(self.pars))
         self.update(check_normals=check_normals)
 
@@ -454,10 +244,9 @@ class Medium(Layer):
     """ A derived class to contain the properties of the medium (ambient seawater,
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
-    def __init__(self,layer_type='medium',density=None,material='seawater',mu=None,):
-        super().__init__(layer_type,density,material)
+    def __init__(self,layer_type='medium',density=None,mu=None,):
+        super().__init__(layer_type,density)
         self.pars.mu = mu
-        #self.pars.mu = Material.mu
         print('Created Medium object with parameters:\n{}'.format(self.pars))
 
 #==============================================================================
@@ -474,20 +263,22 @@ class Morphology():
             list to contain Layers
         """
         self.metadata = metadata
-        self.Layers = []
-        # Preserve passed parameters
-        #self.matlPars = matlPars
-        #self.scalePars = scalePars
-        #self.shapePars = shapePars
-        #self.meshPars = meshPars
-        # Calculate geometric parameters for the surface and inclusion
-        #self.GeomParams = get_ChimeraParams(shape_pars=shapePars,scalePars=scalePars,mesh_pars=meshPars)
-        #self.g = Materials.g # Include as an argument for units flexibility and nondimensionalization
-        # Add an attribute to store Layers. The medium (typically
-        # ambient seawater) is always the 0th layer
-        #self.layers = [Medium(Material=self.matlPars[medium]*self.scalePars['Delta_rho'],mu=self.scalePars['mu'])]
+        self.layers = []
 
-    def gen_surface(self,vectors=None,layer_type='surface',density=None,immersed_in=0,material=None,
+    def gen_medium(self,layer_type='medium',density=None,mu=None):
+        """A method to facilitate generating Medium objects to iniate
+           a morphology. 
+        """
+        try:
+            medium = Medium(layer_type=layer_type,density=density,mu=mu)]
+            self.layers.append(medium)
+            print('Added Medium to layers list:')
+            self.print_layer(layer_list=[-1])
+        except:
+            print('Failed to generate a Medium object...')
+        
+
+    def gen_surface(self,vectors=None,layer_type='surface',density=None,immersed_in=0,
                     color=None,get_points=True,check_normals=False,get_points=True,
                     tetra_project=0.03,tetra_project_min=0.01e-6):
         """A method to facilitate generating Surface objects to iniate
@@ -501,7 +292,7 @@ class Morphology():
         try:
             nlayers = len(self.layers)
             surface = Surface(vectors=vectors,layer_type=layer_type,density=density,immersed_in=immersed_in,
-                              material=material,check_normals=check_normals,get_points=get_points,
+                              check_normals=check_normals,get_points=get_points,
                               tetra_project=tetra_project,tetra_project_min=tetra_project_min)
             print('got here')
             self.layers.append(surface)
@@ -510,10 +301,10 @@ class Morphology():
             print('Added Surface to layers list:')
             self.print_layer(layer_list=[-1])
         except:
-            print('Failed to load file or generate a Surface object...')
+            print('Failed to generate a Surface object...')
         
     def gen_inclusion(self,vectors=None,layer_type='inclusion',density=None,immersed_in=None,
-                 material=None,color=None,check_normals=False):
+                 color=None,check_normals=False):
         """A method to facilitate generating Inclusion objects within a surface
            or another inclusion. The parameter immersed_in specifies the index of 
            the layer in which the inclusion is immersed, either a Surface 
@@ -528,7 +319,7 @@ class Morphology():
         try:
             nlayers = len(self.layers)
             inclusion = Inclusion(vectors=vectors,layer_type=layer_type,density=density,immersed_in=immersed_in,
-                 material=material,color=color,check_normals=check_normals)
+                 color=color,check_normals=check_normals)
             self.layers.append(inclusion)
             # Add new layer to the layer which contains it
             print('Adding new layer to container...')
@@ -563,20 +354,6 @@ class Morphology():
                 colors[:,2] = np.ones([nfaces])-layer.rel_speed.flatten()
             else:
                 colors = layer.pars.color
-            #elif layer.pars.material == 'lipid':
-            #    colors = np.asarray([0.,1.,1.])
-            #elif layer.pars.material == 'calcite':
-            #    colors = 'gray'
-            #elif layer.pars.material == 'seawater':
-            #    colors = np.asarray([0.3,0.3,0.3])
-            #elif layer.pars.material == 'freshwater':
-            #    colors = np.asarray([0.1,0.3,0.3])
-            #elif layer.pars.material == 'brackish':
-            #    colors = np.asarray([0.,1.0,0.])
-            #elif layer.pars.material == 'other':
-            #    colors = 'orange'
-            #else:
-            #    print('Unknown layer material in plot_layers; skipping layer {}'.format(i))
             vectors = layer.vectors.copy()
             for m in range(vectors.shape[0]):
                 if XE is not None:
