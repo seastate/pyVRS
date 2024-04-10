@@ -14,7 +14,6 @@ from attrdict import AttrDict
 
 #from pyVRSutils import n2s_fmt
 from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler, VRSsim
-from meshSpheroid import chimeraSpheroid
 import pickle
 from copy import deepcopy
 import os
@@ -54,14 +53,14 @@ class Layer():
         print(f'Creating Layer of type {layer_type}...')
         # Create a template of null parameters; these will be replaced/augmented
         # by parameters in the arguments, where they are supplied.
-        self.pars=AttrDict({'layer_type' = layer_type,
+        self.pars=AttrDict({'layer_type':layer_type,
                             'density':density,
                             'immersed_in':immersed_in,
                             'contains':contains,
-                            'color':color,})
+                            'color':color})
         # Update with passed parameters
         #self.pars.update(pars)
-        self.pars.transformations = []
+        #self.pars.transformations = []
         self.vectors = vectors
         #self.update()
 
@@ -194,9 +193,9 @@ class Surface(Layer):
         Surface layers are always immersed in the medium, which is (pseudo)layer 0.
     """
     def __init__(self,vectors=None,layer_type='surface',density=None,immersed_in=0,
-                 color=None,get_points=True,check_normals=False,
+                 color=None,contains=[],get_points=True,check_normals=False,
                  tetra_project=0.03,tetra_project_min=0.01e-6):
-        super().__init__(vectors,layer_type,density,immersed_in,color)
+        super().__init__(vectors,layer_type,density,immersed_in,color,contains=[])
         self.pars.tetra_project = tetra_project
         self.pars.tetra_project_min = tetra_project_min
         print('Calculating vector properties for new Surface object with parameters:\n{}'.format(self.pars))
@@ -234,8 +233,8 @@ class Inclusion(Layer):
         of gravity and buoyancy centers and forces.
     """
     def __init__(self,vectors=None,layer_type='inclusion',density=None,immersed_in=None,
-                 color=None,check_normals=False):
-        super().__init__(vectors,layer_type,density,immersed_in,color)
+                 color=None,contains=[],check_normals=False):
+        super().__init__(vectors,layer_type,density,immersed_in,color,contains)
         print('Calculating vector properties for new Inclusion object with parameters:\n{}'.format(self.pars))
         self.update(check_normals=check_normals)
 
@@ -244,8 +243,9 @@ class Medium(Layer):
     """ A derived class to contain the properties of the medium (ambient seawater,
         typically) in the form of a pseudo-layer (which is always the 0th layer).
     """
-    def __init__(self,layer_type='medium',density=None,mu=None,):
-        super().__init__(layer_type,density)
+    def __init__(self,vectors=None,layer_type='medium',density=None,immersed_in=None,color=None
+                 ,contains=[],get_points=False,mu=None,):
+        super().__init__(vectors,layer_type,density,immersed_in,color,contains)
         self.pars.mu = mu
         print('Created Medium object with parameters:\n{}'.format(self.pars))
 
@@ -256,7 +256,7 @@ class Morphology():
         densities. Medium-, Surface- and Inclusion-type layers are created by invoking those
         respective inheritance Classes.
     """
-    def __init__(self,metadata={}):
+    def __init__(self,metadata={},g=None):
     #def __init__(self,matlPars=MatlParams,shapePars=ShapeParams,scalePars=ScaleParams,meshPars=MeshParams,
     #             medium='seawater',metadata={},**kwargs):
         """ Create a morphology instance, preserving metadata and creating a placeholder
@@ -264,13 +264,15 @@ class Morphology():
         """
         self.metadata = metadata
         self.layers = []
+        # gravitational acceleration may be determined elsewhere, depending on dim/nondim scaling
+        self.g = g
 
     def gen_medium(self,layer_type='medium',density=None,mu=None):
         """A method to facilitate generating Medium objects to iniate
            a morphology. 
         """
         try:
-            medium = Medium(layer_type=layer_type,density=density,mu=mu)]
+            medium = Medium(layer_type=layer_type,density=density,mu=mu)
             self.layers.append(medium)
             print('Added Medium to layers list:')
             self.print_layer(layer_list=[-1])
@@ -279,7 +281,7 @@ class Morphology():
         
 
     def gen_surface(self,vectors=None,layer_type='surface',density=None,immersed_in=0,
-                    color=None,get_points=True,check_normals=False,get_points=True,
+                    color=None,get_points=True,check_normals=False,
                     tetra_project=0.03,tetra_project_min=0.01e-6):
         """A method to facilitate generating Surface objects to iniate
            a morphology. The parameter immersed_in specifies the layer
@@ -292,7 +294,7 @@ class Morphology():
         try:
             nlayers = len(self.layers)
             surface = Surface(vectors=vectors,layer_type=layer_type,density=density,immersed_in=immersed_in,
-                              check_normals=check_normals,get_points=get_points,
+                              color=color,check_normals=check_normals,get_points=get_points,
                               tetra_project=tetra_project,tetra_project_min=tetra_project_min)
             print('got here')
             self.layers.append(surface)
@@ -416,6 +418,9 @@ class Morphology():
                 density = layer.pars['density']
                 density_immersed_in = self.layers[immersed_in].pars['density']
                 # Buoyancy forces are due to displacement by the surface
+                print(self.g)
+                print(density_immersed_in)
+                print(layer.pars['total_volume'])
                 layer.pars.F_buoyancy = self.g * density_immersed_in * layer.pars['total_volume']
                 layer.pars.C_buoyancy = layer.pars['volume_center']
                 print('F_buoyancy = ',layer.pars.F_buoyancy)
