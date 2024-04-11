@@ -8,6 +8,10 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 import numpy as np
 from attrdict import AttrDict
+try:
+    from pprint import pprint as pprnt
+except:
+    pprnt = print
 
 from math import ceil, sin, cos, pi, sqrt
 from scipy.integrate import odeint, solve_ivp
@@ -37,7 +41,6 @@ class SimPars():
                  Tmax=2.,cil_speed=0.5*1000*1e-6,
                  x0=0.,y0=0.,z0=0.,
                  phi=pi/3.,theta=pi/4.,psi=pi,
-                 x0=0.,y0=0.,z0=0.,
                  dt=0.01,dt_stat=0.25,first_step=0.01,plotSim='all',plot_intvl=20,resume=False):
         self.x0 = x0
         self.y0 = y0
@@ -86,7 +89,7 @@ class SimPars():
         self.U_const_fixed = np.asarray([self.U0,self.U1,self.U2])
         self.XEinit = np.asarray([self.x0,self.y0,self.z0,self.phi,self.theta,self.psi])
         
-    def from(self,l=None,tau=None,verbose=False):
+    def fromND(self,l=None,tau=None,verbose=False):
         # Convert nondimensional parameters in the SimPars object to dimensional parameters,
         # by scaling with respect to the length and time scales, l and tau. This is the
         # same as the toND conversion, with inverse length and time scales.
@@ -106,7 +109,8 @@ class SimPars():
             self.print()
 
     def print(self):
-        print(f'SimPar attributes are {self.__dict__}')
+        pprnt('SimPar attributes are: ')
+        pprnt(self.__dict__)
 
     def asDict(self):
         # Return the values as an AttrDict

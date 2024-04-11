@@ -6,9 +6,6 @@ import numpy as np
 from math import *
 from attrdict import AttrDict
 
-
-#plt.ion()
-#plt.ioff()
 Exy = lambda t_,a_,b_: (a_*cos(t_),b_*sin(t_))
 
 class chimeraSpheroid():

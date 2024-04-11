@@ -26,8 +26,10 @@ def ScaleParams(V_t=1.,mu=1.,Delta_rho=1.,g=1.):
     return AttrDict({'V_t':V_t,'mu':mu,'Delta_rho':Delta_rho,'g':g})
 
 # Define a default set of shape parameters. From the pyVRSdata mockup, use a formula to set xi below from sigma
-def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,sigma=0.9,beta=1.2):
-    return AttrDict({'alpha_s':alpha_s,'eta_s':eta_s,'alpha_i':alpha_i,'eta_i':eta_i,'sigma':sigma,'beta':beta})
+#def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,sigma=0.9,beta=1.2):
+#    return AttrDict({'alpha_s':alpha_s,'eta_s':eta_s,'alpha_i':alpha_i,'eta_i':eta_i,'sigma':sigma,'beta':beta})
+def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,xi=0.2,beta=1.2):
+    return AttrDict({'alpha_s':alpha_s,'eta_s':eta_s,'alpha_i':alpha_i,'eta_i':eta_i,'xi':xi,'beta':beta})
 # the original defaults...
 #ShapeParams = Attrdict({'alpha_s':2.,'eta_s':0.3,'alpha_i':2.,'eta_i':0.3,'xi':0.3,'beta':1.2})
 
@@ -35,6 +37,74 @@ def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,sigma=0.9,beta=1.2):
 def MeshParams(d_s=0.11285593694928399,nlevels_s=(16,16),d_i=0.09404661412440334,nlevels_i=(16,16)):
     return AttrDict({'d_s':d_s,'nlevels_s':nlevels_s,'d_i':d_i,'nlevels_i':nlevels_i})
 
+
+
+def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
+    """
+       A function to calculate shape and scale parameters from an AttrDict containing
+       a set of chimera parameters.
+    """
+    # Define some shortcuts
+    cp = chimera_pars
+    #
+    #l = cp.l
+    #tau = cp.tau
+    # Medium properties
+    mu = cp.Layers[0].mu
+    density_m = cp.Layers[0].density
+    # Surface properties
+    V_s = cp.Layers[1].V_s
+    D_s = cp.Layers[1].D
+    L0_s = cp.Layers[1].L0
+    L1_s = cp.Layers[1].L1
+    L2_s = cp.Layers[1].L2
+    d_s = cp.Layers[1].d
+    nlevels_s = cp.Layers[1].nlevels
+    density_s = cp.Layers[1].density
+    translate_s = cp.Layers[1].translate
+    # Surface properties
+    V_i = cp.Layers[2].V_i
+    D_i = cp.Layers[2].D
+    L0_i = cp.Layers[2].L0
+    L1_i = cp.Layers[2].L1
+    L2_i = cp.Layers[2].L2
+    d_i = cp.Layers[2].d
+    h_i = cp.Layers[2].h_i
+    nlevels_i = cp.Layers[1].nlevels
+    density_i = cp.Layers[1].density
+    translate_i = cp.Layers[1].translate
+    #
+    V_t = V_s - V_i
+    
+    # create new AttrDicts
+    shape_pars = AttrDict({})
+    scale_pars = AttrDict({})
+    mesh_pars = AttrDict({})
+    
+    # calculate new scale variables
+    scale_pars.Delta_rho = Delta_rho
+    scale_pars.mu = mu
+    scale_pars.g = g
+    scale_pars.V_t = V_t
+    # calculate new shape variables
+    shape_pars.beta = V_s/V_t
+    shape_pars.alpha_s = L0_s/D_s
+    shape_pars.eta_s = L2_s/L0_s
+    shape_pars.alpha_i = L0_s/D_s
+    shape_pars.eta_i = L2_s/L0_s
+    shape_pars.xi = h_i/L0_s
+    #shape_pars.sigma = shape_pars.xi/(1-shape_pars.eta_i) + ((shape_pars.beta-1.)/shape_pars.beta)**(1./3.)
+    # calculate new mesh parameters
+    mesh_pars.d_s = d_s
+    mesh_pars.nlevels_s = nlevels_s
+    mesh_pars.d_i = d_i
+    mesh_pars.nlevels_i = nlevels_i
+    # calculate new density parameters
+    densities = [density_m/Delta_rho,density_s/Delta_rho,density_i/Delta_rho]
+    # extract color parameters
+    colors = [cp.Layers[0].color,cp.Layers[1].color,cp.Layers[2].color]
+    #
+    return shape_pars, scale_pars, mesh_pars, densities, colors
 
 
 def chimeraParams(shape_pars=None,scale_pars=None,
@@ -115,8 +185,9 @@ def chimeraParams(shape_pars=None,scale_pars=None,
     ccI.density = Delta_rho * densities[2]
     alpha_i = shape_pars['alpha_i']
     eta_i = shape_pars['eta_i']
-    sigma = shape_pars['sigma']
-    xi = (1-eta_i)*(sigma - ((beta-1)/beta)**(1./3.))
+    xi = shape_pars['xi']
+    #sigma = shape_pars['sigma']
+    #xi = (1-eta_i)*(sigma - ((beta-1)/beta)**(1./3.))
     # Calculate inclusion volume
     ccI.V_i = (beta-1.) * V_t
     # Calculate dimensions of inclusion chimera
