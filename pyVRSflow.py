@@ -7,11 +7,118 @@ from mpl_toolkits import mplot3d
 from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 import numpy as np
+from attrdict import AttrDict
 
 from math import ceil, sin, cos, pi, sqrt
 from scipy.integrate import odeint, solve_ivp
 
-from pyVRSutils import n2s_fmt
+#from pyVRSutils import n2s_fmt
+#==============================================================================
+# A utility to format numbers or lists of numbers for graphical output
+#def n2s_fmt(f,fmt='7.3e'):
+def n2s_fmt(f,fmt='7.2e'):
+    _fmt = '{:'+fmt+'}'
+    if type(f)==int or type(f)==float:
+        return _fmt.format(f)
+    if type(f)==list or type(f)==np.ndarray:
+        f_str = ''
+        #return [_fmt.format(_f) for _f in f]
+        for _f in f:
+            f_str += _fmt.format(_f) + ' '
+        return f_str
+
+#==============================================================================
+class SimPars():
+    """
+    A simple class to facilitate acquiring and passing VRS simulation
+    parameters with interactive_output widgets.
+    """
+    def __init__(self,dudz=0.,dvdz=0.,dwdx=0.,U0=0.,U1=0.,U2=0.,
+                 Tmax=2.,cil_speed=0.5*1000*1e-6,
+                 x0=0.,y0=0.,z0=0.,
+                 phi=pi/3.,theta=pi/4.,psi=pi,
+                 x0=0.,y0=0.,z0=0.,
+                 dt=0.01,dt_stat=0.25,first_step=0.01,plotSim='all',plot_intvl=20,resume=False):
+        self.x0 = x0
+        self.y0 = y0
+        self.z0 = z0
+        self.phi = phi
+        self.theta = theta
+        self.psi = psi
+        self.dudz = dudz
+        self.dvdz = dvdz
+        self.dwdx = dwdx
+        self.U0 = U0
+        self.U1 = U1
+        self.U2 = U2
+        self.Tmax = Tmax
+        self.cil_speed = cil_speed
+        self.dt = dt
+        self.dt_stat = dt_stat
+        self.plotSim = plotSim
+        self.plot_intvl = plot_intvl
+        self.first_step = first_step
+        self.resume = resume
+        #
+        self.S_fixed = np.asarray([0.,0.,self.dudz,0.,0.,self.dvdz,self.dwdx,0.,0.])
+        self.U_const_fixed = np.asarray([self.U0,self.U1,self.U2])
+        self.XEinit = np.asarray([self.x0,self.y0,self.z0,self.phi,self.theta,self.psi])
+
+    def toND(self,l=None,tau=None,verbose=False):
+        # Convert dimensional parameters in the SimPars object to nondimensional parameters,
+        # by scaling with respect to the length and time scales, l and tau.
+        self.x0 /= l
+        self.y0 /= l
+        self.z0 /= l
+        self.dudz *= tau
+        self.dvdz *= tau
+        self.dwdx *= tau
+        self.U0 *= tau/l
+        self.U1 *= tau/l
+        self.U2 *= tau/l
+        self.Tmax /= tau
+        self.cil_speed *= tau/l
+        self.dt *= dt
+        self.dt_stat *= dt_stat
+        self.first_step *= first_step
+        #
+        self.S_fixed = np.asarray([0.,0.,self.dudz,0.,0.,self.dvdz,self.dwdx,0.,0.])
+        self.U_const_fixed = np.asarray([self.U0,self.U1,self.U2])
+        self.XEinit = np.asarray([self.x0,self.y0,self.z0,self.phi,self.theta,self.psi])
+        
+    def from(self,l=None,tau=None,verbose=False):
+        # Convert nondimensional parameters in the SimPars object to dimensional parameters,
+        # by scaling with respect to the length and time scales, l and tau. This is the
+        # same as the toND conversion, with inverse length and time scales.
+        self.toND(l=1./l,tau=1./tau,verbose=verbose)
+
+    def update(self,new_pars,verbose=False):
+        # Update or add values to the attributes from a dictionary or SimPars object
+        if verbose:
+            self.print()
+        if type(new_pars) == type(SimPars()):
+            self.__dict__.update(new_pars.__dict__)
+        elif type(new_pars) in [type({}),type(AttrDict())]:
+            self.__dict__.update(new_pars)
+        else:
+            print(f'>>>>>>>Skipping unrecognized type for new_pars: {type(new_pars)}')
+        if verbose:
+            self.print()
+
+    def print(self):
+        print(f'SimPar attributes are {self.__dict__}')
+
+    def asDict(self):
+        # Return the values as an AttrDict
+        sPdict = AttrDict(self.__dict__)
+        return sPdict
+        
+    def fromDict(self,sPdict,verbose=False):
+        # Update or add values to the attributes from a dictionary
+        self.__dict__.update(sPdict)
+        if verbose:
+            print(f'SimPar attributes are {self.__dict__}')
+        
 
 #==============================================================================
 def Stokeslet_shape(X,C,alpha,mu):
@@ -158,9 +265,11 @@ class VRSsim():
         with characteristics specified in a Morphology object from the 
         pyVRSmorph module. 
     """
-    def __init__(self,morph=None,surface_layer=1,fig=None,fignum=None):
+    def __init__(self,morph=None,surface_layer=1,fig=None,fignum=None,
+                 simPars=SimPars(),flowfield=flowfield3):
         self.morph = morph
         self.surface_layer = surface_layer
+        self.flowfield = flowfield   # record the function specifying flow
 
         self.F_buoyancy = self.morph.layers[self.surface_layer].pars.F_buoyancy
         self.F_buoyancy_vec = self.morph.layers[self.surface_layer].pars.F_buoyancy_vec
@@ -175,19 +284,73 @@ class VRSsim():
         self.K_VW = self.morph.layers[self.surface_layer].K_VW
         self.K_S = self.morph.layers[self.surface_layer].K_S
         self.K_C = self.morph.layers[self.surface_layer].K_C
-
+        # Set up figure window
         self.fignum = fignum
-        ## Set up graphics
-        #self.fignum = fignum
-        #if fig is not None:
-        #    self.figV = fig
-        #else:
-        #    print('Creating new figure...')
-        #    self.figV = plt.figure(num=self.fignum)
-        #self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
-        #self.axes2 = self.figV.add_subplot(1,2,2,projection='3d')
+        # Values (or placeholder) for simulation parameters
+        self.simPars = simPars#.copy()
+
         
-        #plt.pause(1e-3)
+    def runSP(self,simPars=None):
+        """
+           Execute a VRSsim run, using parameters in self.simPars updated, if present,
+           by the simPars argument (an AttrDict or SimPars object).
+        """
+        if simPars is not None:
+            self.simPars.update(simPars)
+        # make a shortcut
+        sp = self.simPars
+        self.plot_reset = True
+        self.tiny = 10**-6
+        self.U_const_fixed = np.asarray([sp.U0,sp.U1,sp.U2])
+        self.S_fixed = np.asarray([0.,0.,sp.dudz,0.,0.,sp.dvdz,sp.dwdx,0.,0.])
+        #self.U_const_fixed = sp.U_const_fixed#.copy()
+        #self.S_fixed = sp.S_fixed#.copy()
+        # Call flowfield, to set flow parameters S, U
+        self.flowfield(None,U_const_fixed=self.U_const_fixed,S_fixed=self.S_fixed)
+        self.cil_speed = sp.cil_speed
+        self.dt = sp.dt
+        self.dt_stat = sp.dt_stat
+        plot_cnt = 0
+        if sp.XEinit is not None:
+            self.XE = sp.XEinit.reshape([6,])
+        self.Tmax = sp.Tmax
+        self.nsteps = ceil(self.Tmax/self.dt_stat)
+        #self.axes1.scatter(self.XE[0],self.XE[1],self.XE[2],c='red')
+        if not sp.resume:
+            self.t_prev = -self.dt_stat
+        # Set up data storage
+        #self.data = AttrDict()
+        t0 = self.t_prev-self.dt_stat
+        self.time = [t0]                                        # A list for observation times
+        self.position = [self.XE.tolist()]                            # A list for positions
+        self.velocity = [self.Rotated_CoordsVRS(t0,self.XE).tolist()] # A list for absolute velocities
+        # A list for ambient flow velocity
+        self.extflow = self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist()             
+        
+        for istep in range(self.nsteps):
+            self.t_prev += self.dt_stat
+            t_next = min(self.t_prev+self.dt_stat,self.Tmax)
+            XE_old = self.XE
+            sol = solve_ivp(self.Rotated_CoordsVRS,[self.t_prev,t_next],self.XE,method='RK45',
+                            first_step=sp.first_step,max_step=sp.dt)
+            #                first_step=1e-4,max_step=1e-2)
+            self.XE = sol.y[:,-1]
+            self.VEdot = self.Rotated_CoordsVRS(t_next,self.XE)
+            #print(self.XE,self.VEdot)
+            # Record data for metrics
+            self.time.append(t_next)
+            self.position.append(self.XE.tolist())
+            self.velocity.append(self.VEdot.tolist())
+            self.extflow.extend(self.flowfield(np.asarray(self.XE[0:3]).reshape([1,3])).tolist())
+            # Plotting output
+            plot_cnt += 1
+            if sp.plotSim == 'all':
+                self.plot()
+            elif sp.plotSim == 'intvl' and plot_cnt % sp.plot_intvl == 0:
+                self.plot()
+            if sp.plotSim == "end" and t_next == self.Tmax:
+                self.plot()
+    
         
     def run(self,XEinit=None,resume=False,
                  U_const_fixed = np.asarray([0.,0.,0.]),
@@ -195,10 +358,6 @@ class VRSsim():
                  cil_speed = 0.,
                  Tmax=1,dt_stat=0.25,plot_intvl=10,plotSim='all',
                  dt=0.1,first_step=0.01,morph=None,surface_layer=1,flowfield=flowfield3):
-                 #dt = 0.001,morph=None,surface_layer=1,flowfield=flowfield3):
-        #self.figV.clf()
-        #self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
-        #self.axes2 = self.figV.add_subplot(1,2,2,projection='3d')
         self.plot_reset = True
         self.tiny = 10**-6
         self.U_const_fixed = U_const_fixed.copy()
