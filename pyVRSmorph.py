@@ -10,7 +10,8 @@ import numpy as np
 from math import pi
 #import math
 
-from attrdict import AttrDict
+#from attrdict import AttrDict
+from MinimalAttrDict import AttrDict
 
 #from pyVRSutils import n2s_fmt
 from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler, VRSsim
@@ -341,7 +342,7 @@ class Morphology():
                 print(self.layers[l].pars)
                     
 
-    def plot_layers(self,axes,alpha=0.5,autoscale=True,XE=None,f=0.75):
+    def plot_layers(self,axes,alpha=0.5,autoscale=True,XE=None,f=0.75,showFaces=True,showEdges=False):
         """A method to simplify basic 3D visualization of larval morphologies.
         """
         xyz_min = np.asarray([None,None,None],dtype='float').reshape([3,1])
@@ -365,8 +366,13 @@ class Morphology():
                     vectors[m] += np.repeat(XE[0:3].reshape([1,3]),3,axis=0)
                 xyz_max = np.fmax(np.amax(vectors[m],axis=0).reshape([3,1]),xyz_max)
                 xyz_min = np.fmin(np.amin(vectors[m],axis=0).reshape([3,1]),xyz_min)
-            axes.add_collection3d(mplot3d.art3d.Poly3DCollection(vectors,#shade=False,
+            if showFaces:
+                axes.add_collection3d(mplot3d.art3d.Poly3DCollection(vectors,#shade=False,
                                                                  facecolors=colors,
+                                                                 alpha=alpha))
+            if showEdges:
+                axes.add_collection3d(mplot3d.art3d.Poly3DCollection(vectors,#shade=False,
+                                                                 edgecolors=colors,
                                                                  alpha=alpha))
         if autoscale:
             xyz_range = np.max(np.abs(xyz_max - xyz_min))

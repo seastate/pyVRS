@@ -7,9 +7,11 @@ from mpl_toolkits import mplot3d
 from matplotlib import pyplot as plt
 import numpy as np
 from math import pi, sqrt, cos, sin, ceil
-from attrdict import AttrDict
+#from attrdict import AttrDict
+from MinimalAttrDict import AttrDict
 from copy import deepcopy, copy
 import os
+from pprint import pprint as pprnt
 
 #from pyVRSutils import n2s_fmt
 #from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler, VRSsim
@@ -25,9 +27,6 @@ from pyVRSmorph import Morphology
 def ScaleParams(V_t=1.,mu=1.,Delta_rho=1.,g=1.):
     return AttrDict({'V_t':V_t,'mu':mu,'Delta_rho':Delta_rho,'g':g})
 
-# Define a default set of shape parameters. From the pyVRSdata mockup, use a formula to set xi below from sigma
-#def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,sigma=0.9,beta=1.2):
-#    return AttrDict({'alpha_s':alpha_s,'eta_s':eta_s,'alpha_i':alpha_i,'eta_i':eta_i,'sigma':sigma,'beta':beta})
 def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,xi=0.2,beta=1.2):
     return AttrDict({'alpha_s':alpha_s,'eta_s':eta_s,'alpha_i':alpha_i,'eta_i':eta_i,'xi':xi,'beta':beta})
 # the original defaults...
@@ -36,7 +35,6 @@ def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,xi=0.2,beta=1.2):
 # Define a default set of mesh parameters (these determine triangulation of the surface and inclusion)
 def MeshParams(d_s=0.11285593694928399,nlevels_s=(16,16),d_i=0.09404661412440334,nlevels_i=(16,16)):
     return AttrDict({'d_s':d_s,'nlevels_s':nlevels_s,'d_i':d_i,'nlevels_i':nlevels_i})
-
 
 
 def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
@@ -62,7 +60,7 @@ def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
     nlevels_s = cp.Layers[1].nlevels
     density_s = cp.Layers[1].density
     translate_s = cp.Layers[1].translate
-    # Surface properties
+    # Inclusion properties
     V_i = cp.Layers[2].V_i
     D_i = cp.Layers[2].D
     L0_i = cp.Layers[2].L0
@@ -70,9 +68,9 @@ def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
     L2_i = cp.Layers[2].L2
     d_i = cp.Layers[2].d
     h_i = cp.Layers[2].h_i
-    nlevels_i = cp.Layers[1].nlevels
-    density_i = cp.Layers[1].density
-    translate_i = cp.Layers[1].translate
+    nlevels_i = cp.Layers[2].nlevels
+    density_i = cp.Layers[2].density
+    translate_i = cp.Layers[2].translate
     #
     V_t = V_s - V_i
     
@@ -93,7 +91,6 @@ def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
     shape_pars.alpha_i = L0_s/D_s
     shape_pars.eta_i = L2_s/L0_s
     shape_pars.xi = h_i/L0_s
-    #shape_pars.sigma = shape_pars.xi/(1-shape_pars.eta_i) + ((shape_pars.beta-1.)/shape_pars.beta)**(1./3.)
     # calculate new mesh parameters
     mesh_pars.d_s = d_s
     mesh_pars.nlevels_s = nlevels_s
@@ -186,8 +183,6 @@ def chimeraParams(shape_pars=None,scale_pars=None,
     alpha_i = shape_pars['alpha_i']
     eta_i = shape_pars['eta_i']
     xi = shape_pars['xi']
-    #sigma = shape_pars['sigma']
-    #xi = (1-eta_i)*(sigma - ((beta-1)/beta)**(1./3.))
     # Calculate inclusion volume
     ccI.V_i = (beta-1.) * V_t
     # Calculate dimensions of inclusion chimera
@@ -205,7 +200,18 @@ def chimeraParams(shape_pars=None,scale_pars=None,
     #
     return chimera_pars
 
-#                      densities=[None,None,None],colors=[None,'purple',np.asarray([0.,1.,1.])],
+def print_cp(cp):
+    """ A simple function to print chimeraParams in a more readable format.
+    """
+    for k,v in cp.items():
+        if k == 'Layers':
+            for i,vv in enumerate(v):
+                #print('___________')
+                print(f'Layer {i}:')
+                pprnt(dict(vv))
+        else:
+            print(k,v)
+
 
 def chimeraMorphology(M=Morphology(),chimera_params=None,shape_pars=None,scale_pars=None,mesh_pars=None,
                       plotMorph=True,calcFlow=True,calcBody=True):

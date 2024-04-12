@@ -7,7 +7,9 @@ from mpl_toolkits import mplot3d
 from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 import numpy as np
-from attrdict import AttrDict
+#from attrdict import AttrDict
+from MinimalAttrDict import AttrDict
+
 try:
     from pprint import pprint as pprnt
 except:
