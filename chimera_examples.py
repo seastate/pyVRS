@@ -45,7 +45,12 @@ def get_MatlParams(Materials=Materials,reference_material='seawater',Delta_rho=N
         print(f'matl_pars.{key} = {matl_pars[key]}')
     return matl_pars
 
-
+#====================================================================
+# Scaling test, Step 1: Create an example dimensional parameter set
+# Because we don't know the shape/scaling parameters, create a dummy set
+# of parameters, modify them to reflect the example, then get shape &
+# scale parameters.
+#====================================================================
 # create parameter AttrDicts, using default parameters
 scaleParams = ScaleParams()
 shapeParams = ShapeParams()
@@ -55,13 +60,12 @@ MatlParams = get_MatlParams(Delta_rho=scaleParams.Delta_rho)
 densities_ = [MatlParams['seawater'].density,MatlParams['tissue'].density,MatlParams['freshwater'].density]
 colors_ = [MatlParams['seawater'].color,MatlParams['tissue'].color,MatlParams['freshwater'].color]
 
-
-# calculate the corresponding chimera parameter set
+# calculate the corresponding chimera template, with the default parameter set
 cp = chimeraParams(shape_pars=shapeParams,scale_pars=scaleParams,
                   mesh_pars=meshParams,densities=densities_,
                   colors=colors_)
+# cp is now the template (default) chimera parameter set
 print_cp(cp)
-
 # Modify the chimeraParams object with some reasonable dimensional parameters
 # medium properties
 cp.Layers[0].mu = 1030.*1.17e-6
@@ -90,10 +94,29 @@ cp.Layers[2].nd = 12 #16
 cp.Layers[2].nlevels = (16,16)
 cp.Layers[2].density = Materials.freshwater.density
 cp.Layers[2].translate = [0.,0.,cp.Layers[2].h_i]
-
+# print the modified chimera parameters, reflecting a plausible example
 print_cp(cp)
 
-cM = chimeraMorphology(chimera_params=cp,plotMorph=False,calcFlow=True,calcBody=True)
+#============================================================================
+# Calculate the corresponding shape/scale params
+sh,scD,msh,dens,clrs = shape_scaleParams(cp)
+print('Dimensional parameters:')
+print(dict(sh))
+print(dict(scD))
+print(dens)
+print(dict(msh))
+print(clrs)
+
+cpD = chimeraParams(shape_pars=sh,scale_pars=scD,
+                  mesh_pars=msh,densities=dens,
+                  colors=clrs)
+# print to compare to cp:
+print_cp(cpD)
+# record dimensional length and time scales
+l_D = cpD.l
+tauD = cpD.tau
+
+cM = chimeraMorphology(chimera_params=cpD,plotMorph=False,calcFlow=True,calcBody=True)
 
 figureM = plt.figure(num=27)
 figureM.clf()
@@ -103,31 +126,88 @@ cM.plot_layers(axes=axesM,showFaces=True,showEdges=False)
 figureM2 = plt.figure(num=37)
 figureM2.clf()
 axesM2 = figureM2.add_subplot(projection='3d')
-cM.plot_layers(axes=axesM2,showFaces=False,showEdges=True,autoscale=True,alpha=1)
+cM.plot_layers(axes=axesM2,showFaces=False,showEdges=True,autoscale=True)
 
 
-sh,sc,msh,dens,clrs = shape_scaleParams(cp)
+#===========================================
+# create a set of simulation parameters
+sp = SimPars()
+sp.Tmax = 50.
+sp.cil_speed = 500.e-6
+sp.dt = 0.1
+#sp.plotSim = 'end'
+sp.plotSim = 'intvl'
+sp.plot_intvl = 50
+sp.print()
+# create a simulation object
+vs = VRSsim(morph=cM,simPars=sp,fignum=47)
+# run the simulation
+vs.runSP(simPars=sp)
+
+
+============================================================================
+# test that scaling/nondimensionalization works as it should
+scND = ScaleParams(V_t=1.,mu=1.,Delta_rho=1.,g=1.)  # the nondimensional (default) scaling parameters
+# create a corresponding nondimensional version of cp; parameters are the same, except scaling parameters
+cpND = chimeraParams(shape_pars=sh,scale_pars=scND,
+                  mesh_pars=msh,densities=dens,
+                  colors=clrs)
+print_cp(cpND)
+cMND = chimeraMorphology(chimera_params=cpND,plotMorph=False,calcFlow=True,calcBody=True)
+
+figureMND = plt.figure(num=28)
+figureMND.clf()
+axesMND = figureMND.add_subplot(projection='3d')
+cMND.plot_layers(axes=axesMND,showFaces=True,showEdges=False)
+
+figureMND2 = plt.figure(num=38)
+figureMND2.clf()
+axesMND2 = figureMND2.add_subplot(projection='3d')
+cMND.plot_layers(axes=axesMND2,showFaces=False,showEdges=True,autoscale=True)
+
+#===========================================
+# create a set of simulation parameters
+spND = deepcopy(sp)
+# convert dimensional simulation parameters to nondimensional simulation parameters,
+# using the dimensional length and time scale
+spND.toND(l=l_D,tau=tauD)
+spND.plotSim = 'all'
+#spND.dt = 0.01
+spND.print()
+# create a simulation object
+vsND = VRSsim(morph=cMND,simPars=spND,fignum=48)
+# run the simulation
+vsND.runSP(simPars=spND)
+
+
+
+
+
+
+
+
+
+
+
+
+#============================================================================
+# Check that converting from chimeraParams to shape/scale params and back gives the same values
+sh,sc,msh,dens,clrs = shape_scaleParams(cpD)
+
+
+
+
+
 pprnt(dict(sh))
 pprnt(dict(sc))
 pprnt(dens)
 pprnt(dict(msh))
 pprnt(clrs)
 
-
 cp2 = chimeraParams(shape_pars=sh,scale_pars=sc,
                   mesh_pars=msh,densities=dens,
                   colors=clrs)
+# print to compare to cp:
+print_cp(cp2)
 
-
-
-
-
-# create a set of simulation parameters
-sp = SimPars()
-sp.Tmax = 20.
-sp.cil_speed = 50.
-sp.print()
-# create a simulation object
-vs = VRSsim(morph=cM,simPars=sp,fignum=47)
-# run the simulation
-vs.runSP(simPars=sp)
+#

@@ -113,7 +113,7 @@ def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
 def chimeraParams(shape_pars=None,scale_pars=None,
                   mesh_pars=None,densities=[None,None,None],
                   colors=[None,None,None],
-                  chimera_pars=AttrDict({})):
+                  chimera_pars=None):
     """
        A function to calculate geometric and  material parameters, as expected by the chimeraSpheroid 
        class to generate a constitutive chimera. 
@@ -137,6 +137,9 @@ def chimeraParams(shape_pars=None,scale_pars=None,
        To avoid ambiguity, parameters provided as arguments are not duplicated in the returned
        parameter set, except when necessary (e.g., mu) to implement simulations.
     """
+    # Create a chimera_pars AttrDict if one (or a dictionary) is not supplied
+    if chimera_pars == None:
+        chimera_pars = AttrDict()
     # Define some shortcuts
     V_t = scale_pars['V_t']
     Delta_rho = scale_pars['Delta_rho']
@@ -221,7 +224,7 @@ def print_cp(cp):
             print(k,v)
 
 
-def chimeraMorphology(M=Morphology(),chimera_params=None,shape_pars=None,scale_pars=None,mesh_pars=None,
+def chimeraMorphology(M=None,chimera_params=None,shape_pars=None,scale_pars=None,mesh_pars=None,
                       plotMorph=True,calcFlow=True,calcBody=True):
     """
        A function to facilitate generating a Morphology in the form of a constitutive
@@ -236,6 +239,8 @@ def chimeraMorphology(M=Morphology(),chimera_params=None,shape_pars=None,scale_p
         # Calculate dimensional chimera parameters
         chimera_parameters = chimeraParams(shape_pars=shape_pars,scale_pars=scale_pars,
                                            mesh_pars=mesh_pars,densities=densities,colors=colors)
+    if M == None:  # create a Morphology object, if one is not supplied
+        M=Morphology()
     # Attach chimera parameters to the Morphology metadata, for reference and error checking
     M.metadata["chimera_parameters"] = chimera_parameters
     # Attach gravitational acceleration to the Morphology, for body force calculations
