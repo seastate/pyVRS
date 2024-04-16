@@ -11,14 +11,13 @@ from math import pi, sqrt, cos, sin, ceil
 from MinimalAttrDict import AttrDict
 from copy import deepcopy, copy
 import os
+from copy import deepcopy
+import numpy as np
+#from attrdict import AttrDict
+from MinimalAttrDict import AttrDict
 from pprint import pprint as pprnt
 
-#from pyVRSutils import n2s_fmt
-#from pyVRSflow import Stokeslet_shape, External_vel3, larval_V, solve_flowVRS, R_Euler, VRSsim
-#from meshSpheroid import chimeraSpheroid
 from pyVRSmorph import Morphology
-#from pyVRSmorph import Layer, Surface, Inclusion, Medium
-
 
 # Define a default set of scale parameters, corresponding to the nondimensional case
 #ScaleParams = AttrDict({'V_t':1.,'mu':1.,'Delta_rho':1.,'g':1.})
@@ -33,53 +32,58 @@ def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,xi=0.2,beta=1.2):
 #ShapeParams = Attrdict({'alpha_s':2.,'eta_s':0.3,'alpha_i':2.,'eta_i':0.3,'xi':0.3,'beta':1.2})
 
 # Define a default set of mesh parameters (these determine triangulation of the surface and inclusion)
-def MeshParams(d_s=0.11285593694928399,nlevels_s=(16,16),d_i=0.09404661412440334,nlevels_i=(16,16)):
-    return AttrDict({'d_s':d_s,'nlevels_s':nlevels_s,'d_i':d_i,'nlevels_i':nlevels_i})
+def MeshParams(nd_s=16,nlevels_s=(16,16),nd_i=16,nlevels_i=(16,16)):
+    return AttrDict({'nd_s':nd_s,'nlevels_s':nlevels_s,'nd_i':nd_i,'nlevels_i':nlevels_i})
+#def MeshParams(n_s=16,d_s=0.11285593694928399,nlevels_s=(16,16),n_i=16,d_i=0.09404661412440334,nlevels_i=(16,16)):
+#    return AttrDict({'d_s':d_s,'n_s':n_s,'nlevels_s':nlevels_s,'d_i':d_i,'n_i':n_i,'nlevels_i':nlevels_i})
 
 
 def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
     """
        A function to calculate shape and scale parameters from an AttrDict containing
-       a set of chimera parameters.
+       a set of chimera parameters. Where values overlap (e.g., linear dimensions and
+       volume) the most fundamental parameters are used (in this case, linear dimensions)
+       and other values (in this case, volume) are derived from them.
     """
     # Define some shortcuts
     cp = chimera_pars
     #
-    #l = cp.l
-    #tau = cp.tau
     # Medium properties
     mu = cp.Layers[0].mu
     density_m = cp.Layers[0].density
     # Surface properties
-    V_s = cp.Layers[1].V_s
     D_s = cp.Layers[1].D
     L0_s = cp.Layers[1].L0
+    V_s = pi/6. * D_s**2 * L0_s 
     L1_s = cp.Layers[1].L1
     L2_s = cp.Layers[1].L2
-    d_s = cp.Layers[1].d
+    nd_s = cp.Layers[1].nd
+    #d_s = cp.Layers[1].d
     nlevels_s = cp.Layers[1].nlevels
     density_s = cp.Layers[1].density
     translate_s = cp.Layers[1].translate
     # Inclusion properties
-    V_i = cp.Layers[2].V_i
     D_i = cp.Layers[2].D
     L0_i = cp.Layers[2].L0
+    V_i =  pi/6. * D_i**2 * L0_i
     L1_i = cp.Layers[2].L1
     L2_i = cp.Layers[2].L2
-    d_i = cp.Layers[2].d
+    nd_i = cp.Layers[2].nd
+    #d_i = cp.Layers[2].d
     h_i = cp.Layers[2].h_i
     nlevels_i = cp.Layers[2].nlevels
     density_i = cp.Layers[2].density
     translate_i = cp.Layers[2].translate
     #
     V_t = V_s - V_i
-    
+    l = V_t**(1./3.)
+    tau = mu/(Delta_rho*g*l)
+    print(f'l = {l}, tau = {tau}')
     # create new AttrDicts
     shape_pars = AttrDict({})
     scale_pars = AttrDict({})
     mesh_pars = AttrDict({})
-    
-    # calculate new scale variables
+    # record new scale variables
     scale_pars.Delta_rho = Delta_rho
     scale_pars.mu = mu
     scale_pars.g = g
@@ -92,9 +96,11 @@ def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
     shape_pars.eta_i = L2_s/L0_s
     shape_pars.xi = h_i/L0_s
     # calculate new mesh parameters
-    mesh_pars.d_s = d_s
+    mesh_pars.nd_s = nd_s
+    #mesh_pars.d_s = d_s
     mesh_pars.nlevels_s = nlevels_s
-    mesh_pars.d_i = d_i
+    mesh_pars.nd_i = nd_i
+    #mesh_pars.d_i = d_i
     mesh_pars.nlevels_i = nlevels_i
     # calculate new density parameters
     densities = [density_m/Delta_rho,density_s/Delta_rho,density_i/Delta_rho]
@@ -171,7 +177,8 @@ def chimeraParams(shape_pars=None,scale_pars=None,
     ccS.L1 = (1.-eta_s) * ccS.L0
     ccS.translate = None
     # Add triangulation (mesh) parameters  TODO: check for scaling of d and possibly nlevels
-    ccS.d = mesh_pars['d_s']
+    ccS.nd = mesh_pars['nd_s']
+    #ccS.d = mesh_pars['d_s']
     ccS.nlevels = mesh_pars['nlevels_s']
     #----------------------------------------------------------
     # Create a shortcut for the AttrDict of inclusion parameters
@@ -195,7 +202,8 @@ def chimeraParams(shape_pars=None,scale_pars=None,
     ccI.h_i = xi * ccI.L0
     ccI.translate = [0.,0.,ccI.h_i]
     # Add triangulation (mesh) parameters  TODO: check for scaling of d and possibly nlevels
-    ccI.d = mesh_pars['d_i']
+    ccI.nd = mesh_pars['nd_i']
+    #ccI.d = mesh_pars['d_i']
     ccI.nlevels = mesh_pars['nlevels_i']
     #
     return chimera_pars
@@ -307,7 +315,9 @@ class chimeraSpheroid():
         # the upper height parameter b=L1 projecting upwards
         print('tiling upper semispheroid...')
         SE = semiSpheroid(a=self.geomPars.D/2,b = self.geomPars.L1,
-                          d = self.geomPars.d,nlevel=self.geomPars.nlevels[0],levels=self.levels)
+                          nd = self.geomPars.nd,nlevel=self.geomPars.nlevels[0],levels=self.levels)
+        #SE = semiSpheroid(a=self.geomPars.D/2,b = self.geomPars.L1,
+        #                  d = self.geomPars.d,nlevel=self.geomPars.nlevels[0],levels=self.levels)
         SE.tile_quadrant()   # Create tiles for 1/8 of the spheroid
         SE.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE.mirror_tiles(directions=['x','y'])
@@ -317,7 +327,9 @@ class chimeraSpheroid():
         # symmetries with upper semispheroid)
         print('tiling lower semispheroid...')
         SE2 = semiSpheroid(a=self.geomPars.D/2,b = -self.geomPars.L2,
-                           d = self.geomPars.d,nlevel=self.geomPars.nlevels[1],levels=self.levels)
+                           nd = self.geomPars.nd,nlevel=self.geomPars.nlevels[1],levels=self.levels)
+        #SE2 = semiSpheroid(a=self.geomPars.D/2,b = -self.geomPars.L2,
+        #                   d = self.geomPars.d,nlevel=self.geomPars.nlevels[1],levels=self.levels)
         SE2.tile_quadrant()   # Create tiles for 1/8 of the spheroid
         SE2.reflect_tiles()   # Reflect and mirror to complete upper semispheroid
         SE2.mirror_tiles(directions=['x','y'])
@@ -364,13 +376,21 @@ class semiSpheroid():
         b: height of semispheroid above the xy plane
             b>0 implies the semispheroid projects in the positive z-direction
             b<0 implies the semispheroid projects in the negative z-direction
+
+        nd is the approximate number of tiles in one quadrant at the equator.
+        The number of tiles is scaled down as the circumference decreases 
+        approaching the pole.
     """
-    def __init__(self,a=None,b=None,d=None,nlevel=32,levels=True,**kwargs):
+    def __init__(self,a=None,b=None,nd=None,nlevel=32,levels=True,**kwargs):
+    #def __init__(self,a=None,b=None,d=None,nlevel=32,levels=True,**kwargs):
 
         self.a = a
         self.b = b
-        self.d = d
+        self.nd = nd          
+        self.d = pi*a/(2.*nd)
         self.ds = sqrt(3.)/2. * self.d
+        #self.d = d
+        #self.ds = sqrt(3.)/2. * self.d
         self.nlevel = nlevel
 
         self.rows = []

@@ -73,7 +73,8 @@ cp.Layers[1].L1 = 100.e-6
 cp.Layers[1].L2 = 60.e-6
 cp.Layers[1].L0 = cp.Layers[1].L1 +  cp.Layers[1].L2
 cp.Layers[1].density = Materials.tissue.density
-cp.Layers[1].d = 6.e-6
+#cp.Layers[1].d = 6.e-6
+cp.Layers[1].nd = 12 #16
 cp.Layers[1].nlevels = (16,16)
 cp.Layers[1].translate = None
 
@@ -83,8 +84,9 @@ cp.Layers[2].D = 75.e-6
 cp.Layers[2].L1 = 60.e-6
 cp.Layers[2].L2 = 40.e-6
 cp.Layers[2].L0 = cp.Layers[2].L1 +  cp.Layers[2].L2
-cp.Layers[2].d = 5.e-6
 cp.Layers[2].h_i = 20.e-6
+#cp.Layers[2].d = 5.e-6
+cp.Layers[2].nd = 12 #16
 cp.Layers[2].nlevels = (16,16)
 cp.Layers[2].density = Materials.freshwater.density
 cp.Layers[2].translate = [0.,0.,cp.Layers[2].h_i]
@@ -108,10 +110,13 @@ sh,sc,msh,dens,clrs = shape_scaleParams(cp)
 pprnt(dict(sh))
 pprnt(dict(sc))
 pprnt(dens)
+pprnt(dict(msh))
 pprnt(clrs)
 
 
-
+cp2 = chimeraParams(shape_pars=sh,scale_pars=sc,
+                  mesh_pars=msh,densities=dens,
+                  colors=clrs)
 
 
 
