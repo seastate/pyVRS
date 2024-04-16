@@ -181,33 +181,39 @@ vsND.runSP(simPars=spND)
 
 
 
+#===========================================
+# graph some result comparisons
+skip_stat = 0
+# dimensional results
+timeD = np.asarray(vs.time)[skip_stat:]
+velocityD = np.asarray(vs.velocity)[skip_stat:,:]
+positionD = np.asarray(vs.position)[skip_stat:,:]
+extflowD = np.asarray(vs.extflow)[skip_stat:,:]
+# dimensional results
+timeND = np.asarray(vsND.time)[skip_stat:]
+velocityND = np.asarray(vsND.velocity)[skip_stat:,:]
+positionND = np.asarray(vsND.position)[skip_stat:,:]
+extflowND = np.asarray(vsND.extflow)[skip_stat:,:]
 
+figureR = plt.figure(num=8)
+figureR.clf()
+axesR1 = figureR.add_subplot(1,2,1,projection='3d')
+# plot dimensional positions
+axesR1.plot(positionD[:,0],positionD[:,1],positionD[:,2],'r')
+# plot rescaled nondimensional positions
+axesR1.plot(l*positionND[:,0],l*positionND[:,1],l*positionND[:,2],'b-.')
+axesR1.set_xlabel('X')
+axesR1.set_ylabel('Y')
+axesR1.set_zlabel('Z')
 
+axesR2 = figureR.add_subplot(1,2,2,projection='3d')
+# plot dimensional velocities
+axesR2.plot(velocityD[:,0],velocityD[:,1],velocityD[:,2],'r')
+# plot rescaled nondimensional velocities
+axesR2.plot(l/tau*velocityND[:,0],l/tau*velocityND[:,1],l/tau*velocityND[:,2],'b-.')
+axesR2.set_xlabel('U')
+axesR2.set_ylabel('V')
+axesR2.set_zlabel('W')
 
-
-
-
-
-
-
-#============================================================================
-# Check that converting from chimeraParams to shape/scale params and back gives the same values
-sh,sc,msh,dens,clrs = shape_scaleParams(cpD)
-
-
-
-
-
-pprnt(dict(sh))
-pprnt(dict(sc))
-pprnt(dens)
-pprnt(dict(msh))
-pprnt(clrs)
-
-cp2 = chimeraParams(shape_pars=sh,scale_pars=sc,
-                  mesh_pars=msh,densities=dens,
-                  colors=clrs)
-# print to compare to cp:
-print_cp(cp2)
-
-#
+#self.axes1 = self.figV.add_subplot(1,2,1,projection='3d')
+#self.axes2 = self.figV.add_subplot(1,2,2,projection='3d')

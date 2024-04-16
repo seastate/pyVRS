@@ -83,9 +83,9 @@ class SimPars():
         self.U2 *= tau/l
         self.Tmax /= tau
         self.cil_speed *= tau/l
-        self.dt *= dt
-        self.dt_stat *= dt_stat
-        self.first_step *= first_step
+        self.dt /= tau
+        self.dt_stat /= tau
+        self.first_step /= tau
         #
         self.S_fixed = np.asarray([0.,0.,self.dudz,0.,0.,self.dvdz,self.dwdx,0.,0.])
         self.U_const_fixed = np.asarray([self.U0,self.U1,self.U2])
