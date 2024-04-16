@@ -372,8 +372,9 @@ class Morphology():
                                                                  alpha=alpha))
             if showEdges:
                 axes.add_collection3d(mplot3d.art3d.Poly3DCollection(vectors,#shade=False,
+                                                                 facecolors=None,
                                                                  edgecolors=colors,
-                                                                 alpha=alpha))
+                                                                     alpha=0.01))
         if autoscale:
             xyz_range = np.max(np.abs(xyz_max - xyz_min))
             xyz_mid = (xyz_max + xyz_min)/2
