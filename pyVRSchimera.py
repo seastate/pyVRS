@@ -276,10 +276,11 @@ def chimeraMorphology(M=Morphology(),chimera_params=None,shape_pars=None,scale_p
         figureM.canvas.draw()
         figureM.canvas.flush_events()
         plt.pause(0.25)
-        if calcBody:  # if requested, calculate buoyancy & gravity forces
-            M.body_calcs()
-        if calcFlow:  # if requested, calculate flow around the surface
-            M.flow_calcs(surface_layer=1)
+    # if requested, calculate buoyancy & gravity forces
+    if calcBody:  
+        M.body_calcs()
+    if calcFlow:  # if requested, calculate flow around the surface
+        M.flow_calcs(surface_layer=1)
     # Return the Morphology object
     return M
 

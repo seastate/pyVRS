@@ -80,11 +80,11 @@ cp.Layers[1].translate = None
 
 #Inclusion properties
 #cp.Layers[2].V_i
-cp.Layers[2].D = 75.e-6
+cp.Layers[2].D = 80.e-6
 cp.Layers[2].L1 = 60.e-6
-cp.Layers[2].L2 = 40.e-6
+cp.Layers[2].L2 = 50.e-6
 cp.Layers[2].L0 = cp.Layers[2].L1 +  cp.Layers[2].L2
-cp.Layers[2].h_i = 20.e-6
+cp.Layers[2].h_i = 30.e-6
 #cp.Layers[2].d = 5.e-6
 cp.Layers[2].nd = 12 #16
 cp.Layers[2].nlevels = (16,16)
@@ -103,7 +103,7 @@ cM.plot_layers(axes=axesM,showFaces=True,showEdges=False)
 figureM2 = plt.figure(num=37)
 figureM2.clf()
 axesM2 = figureM2.add_subplot(projection='3d')
-cM.plot_layers(axes=axesM2,showFaces=False,showEdges=True,autoscale=True)
+cM.plot_layers(axes=axesM2,showFaces=False,showEdges=True,autoscale=True,alpha=1)
 
 
 sh,sc,msh,dens,clrs = shape_scaleParams(cp)
@@ -122,3 +122,12 @@ cp2 = chimeraParams(shape_pars=sh,scale_pars=sc,
 
 
 
+# create a set of simulation parameters
+sp = SimPars()
+sp.Tmax = 20.
+sp.cil_speed = 50.
+sp.print()
+# create a simulation object
+vs = VRSsim(morph=cM,simPars=sp,fignum=47)
+# run the simulation
+vs.runSP(simPars=sp)
