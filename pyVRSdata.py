@@ -76,7 +76,7 @@ class MorphMatrix():
         p.sigma = sigma
         
     def genMatrix(self,morph_path=None,prefix=None,suffix='mrph',fpars='baer',
-                  plotMorph=True,calcBody=True,calcFlow=True,fignum=63):
+                  plotMorph=True,saveMorph=True,calcBody=True,calcFlow=True,fignum=63):
         """ Set up a matrix of embryo morphologies. 
         """
         p = self.pars  # Create a shortcut
@@ -102,26 +102,25 @@ class MorphMatrix():
                                        mesh_pars=p.msh_pars,densities=p.densities,
                                        colors=p.colors)
                     #print_cp(cp)
-                    # create a chimeraMorphology, and plot it if requested
-                    self.cM = chimeraMorphology(chimera_params=self.cp,plotMorph=plotMorph,calcFlow=calcFlow,calcBody=calcBody)
-                    # create the filepath and save the morphology
-                    #if morph_path != None:
+                    # create the filepath 
                     self.morph_files[i_a][i_b][i_e] = \
-                        self.save_morph(morph_path=morph_path,prefix=prefix,suffix=suffix,fpars=fpars)
-                    #fullpath = self.save_morph(morph_path=morph_path,prefix=prefix,suffix=suffix,fpars=fpars)
-                    #self.morph_files[i_a][i_b][i_e] = fullpath
+                        self.name_morph(morph_path=morph_path,prefix=prefix,suffix=suffix,fpars=fpars)
+                    # if requested, save the Morphology
+                    if saveMorph:
+                    # create a chimeraMorphology, and plot it if requested
+                        self.cM = chimeraMorphology(chimera_params=self.cp,plotMorph=plotMorph,
+                                                    calcFlow=calcFlow,calcBody=calcBody)
+                        self.save_morph(fullpath=self.morph_files[i_a][i_b][i_e])
 
-
-    def save_morph(self,morph_path=None,prefix=None,suffix='mrph',fpars='baer',fignum=63):
+    def name_morph(self,morph_path=None,prefix=None,suffix='mrph',fpars='baer'):
         """
-        A function to facilitate saving the current chimeraMorphology object (cM).
+        A function to facilitate saving the current Morphology object
         with an informative name. The parameter fpars determines which 
         parameters will be included in the filename: a = alpha, b = beta, e=eta, 
         d = density (assumed to be for the inclusion layer).
         
-        Values for those parameters are taken from the current shape_pars and densities dictionaries.
-        This method should be run after chimeraMorphology and before shape parameters are
-        changed, to insure the saved metadata  correct.
+        Values for those parameters are taken from the current shape_pars and 
+        densities dictionaries.
         """
         # make shortcuts
         p = self.pars  
@@ -140,13 +139,36 @@ class MorphMatrix():
         # complete the filename with the suffix
         filename += '.' + suffix
         fullpath = os.path.join(morph_path,filename)
+        #
+        return fullpath
+
+    def save_morph(self,fullpath=None,morph_path=None,prefix=None,suffix='mrph',fpars='baer',fignum=63):
+        """
+        A function to facilitate saving the current Morphology object.
+        with an informative name. The full path can be provided in the
+        argument fullpath. Alternatively, it can be supplied by the 
+        name_morph method. In that case, the parameter fpars determines which 
+        parameters will be included in the filename: a = alpha, b = beta, e=eta, 
+        d = density (assumed to be for the inclusion layer).
+        
+        Values for those parameters are taken from the current shape_pars and densities dictionaries.
+        This method should be run after chimeraMorphology and before shape parameters are
+        changed, to insure the saved metadata  correct.
+        """
+        # make shortcuts
+        p = self.pars  
+        sh = p.shape_pars
+        # Get the full path to save the morphologu filename and path
+        if fullpath == None:
+            fullpath = self.name_morph(self,morph_path=morph_path,prefix=prefix,suffix=suffix,fpars=fpars)
+        # save the morphology as a pickle file
         with open(fullpath, 'wb') as handle:
-            #print(f'Saving morphology as {fc_s.selected}')
             pickle.dump(self.cM, handle, protocol=pickle.HIGHEST_PROTOCOL)
             print(f'Saved morphology as {fullpath}')
         #
         return fullpath
 
+# A function to simplify loading pickled Morphology objects
 def load_morph(morph_path=None,filename=None,fignum=None):
     """
         Load the requested Morphology object. filename can either be a full path, or
@@ -266,66 +288,84 @@ class SimMatrix():
                     print('new_data = ',new_data)
                     self.sim_data[i_s][i_v][i_x] = new_data
 
-'''
+
 #==============================================================================
 class DataManager():
     """
         A class to faciliate batch collection, analysis and plotting of swimming
         performance metrics for the pyVRS swimming embryo model.
     """
-    def __init__(self,mm_path=None,mm_filename=None,dpars={}):
-        """ Create a DataManager instance.
-            Change the default so that path and filename are required (but can be
-            supplied later, before execution).
+    def __init__(self,MM=None,spars=None):
+        """ Create a DataManager instance, using the MorphMatrix object MM if
+            is supplied. Record simulation parameters spars if they are supplied.
         """
-        # Create a dictionary to store parameters and add default parameters
-        self.dpars = AttrDict({'mm_path':mm_path,'mm_filename':mm_filename})
-        # update with parameters from the dictionary argument, if any
-        self.dpars.update(dpars)
-        self.spars = AttrDict()
+        self.MM = MM
+        # Create an AttrDict to store simulation parameters
+        self.spars = AttrDict({})
+        # update with parameters from the argument, if any
+        if spars != None:
+            self.spars.update(spars)
         
-    def loadMorphMatrix(self,mm_path=None,mm_filename=None):
+    def loadMorphMatrix(self,filename=None):
         """ Load an existing MorphMatrix object.
         """
-        d = self.dpars  # Create a shortcut
-        # Update parameters if requested
-        if mm_filename is not None:
-            d.mm_filename = filename
-        if mm_path is not None:
-            d.mm_path = mm_path
-        # Load requested file
-        if d.mm_path is not None:
-            fullpath = os.path.join(d.mm_path,d.mm_filename)
-        else:
-            fullpath = filename
-        with open(fullpath, 'rb') as handle:
+        with open(filename, 'rb') as handle:
             self.MM = pickle.load(handle)
-            print(f'Loaded MorphMatrix file {fullpath}')
+            print(f'Loaded MorphMatrix file {filename}')
 
-    def saveMorphMatrix(self,mm_path=None,mm_filename=None):
-        """ Save a MorphMatrix object. If not supplied, the
-            path to the directory (mm_path) and filename 
-            (mm_filename) are taken from the dpars dictionary.
+    def saveMorphMatrix(self,filename=None):
+        """ Save the current MorphMatrix object.
         """
-        d = self.dpars  # Create a shortcut
-        # Update parameters if requested
-        if mm_path is not None:
-            d.mm_path = mm_path
-        if mm_filename is not None:
-            d.mm_filename = filename
-        fullpath = os.path.join(d.mm_path,d.mm_filename)
-        # Save the MorphMatrix object:
-        with open(fullpath, 'wb') as handle:
-            #print(f'Saving morphology as {fc_s.selected}')
+        with open(filename, 'wb') as handle:
             pickle.dump(self.MM, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        print(f'Saved MorphMatrix as {fullpath}')
+            print(f'Saved MorphMatrix as {filename}')
 
-    def genMorphMatrix(self,MM=None,dpars={},mpars={},scale_pars={},saveMM=True):
+    def genSimMatrix(self,MM=None,spars=None):
+        """ Set up a matrix of swimming simulations, and collect basic statistics,
+            for the morphologies in the MorphMatrix, MM.
+            spars is an AttrDict of simulation parameters. 
+        """
+        # Update the MorphMatix object and simulation parameters, if requested
+        if MM is not None:
+            self.MM = MM
+        if spars is not None:
+            self.spars.update(spars)
+        # Create shortcuts
+        s = self.spars
+        p = self.MM.pars
+        self.alpha_num = range(p.alpha_set.size)
+        self.beta_num = range(p.beta_set.size)
+        self.eta_num = range(p.eta_set.size)
+        # Create nested lists for results etc.
+        results_template = [[[None for i_x in range(len(s.XEinits))] for i_v in s.Vcil_set] for i_s in s.shear_set]
+        self.sim_data = [[[results_template for i_e in self.eta_num] for i_b in self.beta_num] for i_a in self.alpha_num]
+        # The total number of simulations, and a counter...
+        simnum = p.alpha_set.size * p.beta_set.size * p.eta_set.size * \
+                 s.Vcil_set.size * s.shear_set.size * len(s.XEinits)
+        simcount = 0
+
+        # Loops through morphologies
+        for i_a in self.alpha_num:          # the alpha index in the simulation matrix
+            for i_b in self.beta_num:       # the beta index in the simulation matrix
+                for i_e in self.eta_num:    # the eta index in the simulation matrix
+                    simcount += 1
+                    print(f'********************************************************') 
+                    print(f'******Simulating Morphology {simcount} of {simnum}******') 
+                    print(f'********************************************************') 
+                    # Load selected morphology
+                    self.M = load_morph(filename=self.MM.morph_files[i_a][i_b][i_e])
+                    self.SM = SimMatrix(M=self.M)
+                    self.SM.genMatrix(spars=self.spars)
+                    self.sim_data[i_a][i_b][i_e] = self.SM.sim_data
+
+
+'''
+    def genMorphMatrix(self,spars=None):
         """ Set up a matrix of embryo morphologies. MM, a MorphMatrix
             object, is created if it is not passed.
 
             Note that if a MorphMatrix is passed, it is used unchanged:
-            dpars and mpars are ignored. This may change in future 
+            spars and mpars are ignored. This may change in future 
             versions.
         """
         d = self.dpars  # Create a shortcut and update parameters dictionary
@@ -340,54 +380,5 @@ class DataManager():
         # If requested, save the MorphMatrix object:
         if saveMM:
             self.saveMorphMatrix()
-
-    def genSimMatrix(self,MM=None,spars={}):
-        """ Set up a matrix of swimming simulations, and collect basic statistics,
-            for the morphologies in the MorphMatrix, MM.
-            spars is an AttrDict of simulation parameters. 
-        """
-        # The MorphMatix object should either be passed or already an attribute
-        if MM is not None:
-            self.MM = MM
-        # Create shortcuts
-        s = self.spars
-        p = self.MM.pars
-        # Create a MorphPars object to handle parameters
-        self.mp = MorphPars()
-        # Default to run the complete matrix of morphologies; this can be modified in
-        # the spars argument.
-        self.spars = AttrDict({'alpha_num': range(p.alpha_set.size),
-                               'beta_num': range(p.beta_set.size),
-                               'eta_num': range(p.eta_set.size),
-                               'shear_set': np.linspace(0,.01,7),
-                               'Vcil_set': np.linspace(0.,0.4,5),
-                               'flow_type': 'rotation',
-                               'XEinits': [[0.,0.,0.,pi/4,0.,pi]],
-                               'Tmax': 100, 'dt': 0.5,
-                               'dt_stat': 1., 'skip_stat': 0,
-                               'plot_intvl': 25, 'plotSim': 'intvl'})
-        self.spars.update(spars)
-        s = self.spars # Create shortcuts
-        # Create nested lists for results etc.
-        results_template = [[[None for i_x in range(len(s.XEinits))] for i_v in s.Vcil_set] for i_s in s.shear_set]
-        self.sim_data = [[[results_template for i_e in s.eta_num] for i_b in s.beta_num] for i_a in s.alpha_num]
-        # The total number of simulations, and a counter...
-        simnum = p.alpha_set.size * p.beta_set.size * p.eta_set.size * \
-                 s.Vcil_set.size * s.shear_set.size * len(s.XEinits)
-        simcount = 0
-
-        # Loops through morphologies
-        for i_a in s.alpha_num:          # the alpha index in the simulation matrix
-            for i_b in s.beta_num:       # the beta index in the simulation matrix
-                for i_e in s.eta_num:    # the eta index in the simulation matrix
-                    # Load selected morphology
-                    fpath = self.MM.morph_files[i_a][i_b][i_e]
-                    self.mp.load_morphND(fullpath=fpath,plotMorph=False)
-                    self.SM = SimMatrix(mp=self.mp,spars=s)
-                    self.SM.genMatrix()
-                    self.sim_data[i_a][i_b][i_e] = self.SM.sim_data
-
-
-
 
 '''

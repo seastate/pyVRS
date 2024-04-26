@@ -19,11 +19,14 @@ from pprint import pprint as pprnt
 
 from pyVRSmorph import Morphology
 
-# Define a default set of scale parameters, corresponding to the nondimensional case
-# Define as a function that returns an AttrDict, to avoid unintentional binding between parameters sets
+# Define functions that return AttrDict's of parameters, to avoid unintentional
+# binding between parameters sets
+
+# The default scale parameters correspond to the nondimensional case
 def ScaleParams(V_t=1.,mu=1.,Delta_rho=1.,g=1.):
     return AttrDict({'V_t':V_t,'mu':mu,'Delta_rho':Delta_rho,'g':g})
 
+# Define a default set of shape parameters
 def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,xi=0.2,beta=1.2):
     return AttrDict({'alpha_s':alpha_s,'eta_s':eta_s,'alpha_i':alpha_i,'eta_i':eta_i,'xi':xi,'beta':beta})
 
