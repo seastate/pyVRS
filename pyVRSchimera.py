@@ -20,22 +20,16 @@ from pprint import pprint as pprnt
 from pyVRSmorph import Morphology
 
 # Define a default set of scale parameters, corresponding to the nondimensional case
-#ScaleParams = AttrDict({'V_t':1.,'mu':1.,'Delta_rho':1.,'g':1.})
-#ScaleParams = AttrDict({'V_t':1.,'mu':1030.*1.17e-6,'Delta_rho':1.,'g': 9.81})
 # Define as a function that returns an AttrDict, to avoid unintentional binding between parameters sets
 def ScaleParams(V_t=1.,mu=1.,Delta_rho=1.,g=1.):
     return AttrDict({'V_t':V_t,'mu':mu,'Delta_rho':Delta_rho,'g':g})
 
 def ShapeParams(alpha_s=2.,eta_s=0.3,alpha_i=2.,eta_i=0.3,xi=0.2,beta=1.2):
     return AttrDict({'alpha_s':alpha_s,'eta_s':eta_s,'alpha_i':alpha_i,'eta_i':eta_i,'xi':xi,'beta':beta})
-# the original defaults...
-#ShapeParams = Attrdict({'alpha_s':2.,'eta_s':0.3,'alpha_i':2.,'eta_i':0.3,'xi':0.3,'beta':1.2})
 
 # Define a default set of mesh parameters (these determine triangulation of the surface and inclusion)
-def MeshParams(nd_s=16,nlevels_s=(16,16),nd_i=16,nlevels_i=(16,16)):
+def MeshParams(nd_s=12,nlevels_s=(16,16),nd_i=12,nlevels_i=(16,16)):
     return AttrDict({'nd_s':nd_s,'nlevels_s':nlevels_s,'nd_i':nd_i,'nlevels_i':nlevels_i})
-#def MeshParams(n_s=16,d_s=0.11285593694928399,nlevels_s=(16,16),n_i=16,d_i=0.09404661412440334,nlevels_i=(16,16)):
-#    return AttrDict({'d_s':d_s,'n_s':n_s,'nlevels_s':nlevels_s,'d_i':d_i,'n_i':n_i,'nlevels_i':nlevels_i})
 
 
 def shape_scaleParams(chimera_pars=None,Delta_rho=1.,g=9.81,mu=1030.*1.17e-6):
