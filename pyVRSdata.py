@@ -340,6 +340,7 @@ class DataManager():
         results_template = [[[None for i_x in range(len(s.XEinits))] for i_v in s.Vcil_set] for i_s in s.shear_set]
         self.sim_data = [[[results_template for i_e in self.eta_num] for i_b in self.beta_num] for i_a in self.alpha_num]
         # The total number of simulations, and a counter...
+        morphnum = p.alpha_set.size * p.beta_set.size * p.eta_set.size
         simnum = p.alpha_set.size * p.beta_set.size * p.eta_set.size * \
                  s.Vcil_set.size * s.shear_set.size * len(s.XEinits)
         simcount = 0
@@ -350,7 +351,7 @@ class DataManager():
                 for i_e in self.eta_num:    # the eta index in the simulation matrix
                     simcount += 1
                     print(f'********************************************************') 
-                    print(f'******Simulating Morphology {simcount} of {simnum}******') 
+                    print(f'******Simulating Morphology {simcount} of {morphnum}******') 
                     print(f'********************************************************') 
                     # Load selected morphology
                     self.M = load_morph(filename=self.MM.morph_files[i_a][i_b][i_e])
