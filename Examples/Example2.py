@@ -50,7 +50,7 @@ timeD = np.asarray(vs.time)[skip_stat:]
 velocityD = np.asarray(vs.velocity)[skip_stat:,:]
 positionD = np.asarray(vs.position)[skip_stat:,:]
 extflowD = np.asarray(vs.extflow)[skip_stat:,:]
-# dimensional results
+# nondimensional results
 timeND = np.asarray(vsND.time)[skip_stat:]
 velocityND = np.asarray(vsND.velocity)[skip_stat:,:]
 positionND = np.asarray(vsND.position)[skip_stat:,:]
