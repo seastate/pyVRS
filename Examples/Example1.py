@@ -21,7 +21,7 @@ plt.ion()
 from pyVRSchimera import chimeraParams, shape_scaleParams, chimeraMorphology, print_cp
 from pyVRSchimera import ScaleParams, ShapeParams, MeshParams
 from pyVRSflow import SimPars, VRSsim
-from pyVRSdata import Materials, get_MatlParams, MorphMatrix, load_morph, SimMatrix, DataManager
+from pyVRSdata import Materials, get_MatlParams
 
 #====================================================================
 # Scaling test, Step 1: Create an example dimensional parameter set
